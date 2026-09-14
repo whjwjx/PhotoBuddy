@@ -22,7 +22,19 @@ import kotlinx.coroutines.withContext
 class DeleteCoordinator(
     private val resolver: ContentResolver,
 ) {
-    /** API 30+：创建系统删除确认请求，返回 PendingIntent 供 UI 启动；失败返回 null。 */
+    /**
+     * API 30+：【首选】移入系统「最近删除 / 回收站」，用户可在系统相册恢复（PRD 4.5 / 11.4）。
+     * 返回 PendingIntent 供 UI 启动；失败返回 null。
+     */
+    fun createTrashRequest(uris: List<Uri>): PendingIntent? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        return runCatching { MediaStore.createTrashRequest(resolver, uris, true) }.getOrNull()
+    }
+
+    /**
+     * API 30+：【降级】永久删除，不可恢复。
+     * 仅在系统不支持回收站时使用；PRD 要求优先走最近删除，所以不要默认调它。
+     */
     fun createDeleteRequest(uris: List<Uri>): PendingIntent? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
         return runCatching { MediaStore.createDeleteRequest(resolver, uris) }.getOrNull()

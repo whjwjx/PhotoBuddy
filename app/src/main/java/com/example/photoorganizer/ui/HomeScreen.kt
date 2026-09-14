@@ -23,6 +23,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -38,6 +39,7 @@ import com.example.photoorganizer.domain.StatsService
 fun HomeScreen(onStartOrganize: () -> Unit) {
     val vm: HomeViewModel = viewModel()
     val state by vm.uiState.collectAsState()
+    val context = LocalContext.current
 
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) }) { padding ->
         Column(
@@ -85,6 +87,31 @@ fun HomeScreen(onStartOrganize: () -> Unit) {
                     Text(
                         "占用 ${formatBytes(stats.totalBytes)} · 截图 ${stats.screenshotCount} · 大视频 ${stats.largeVideoCount}",
                     )
+                }
+            }
+
+            // 仅在「疑似部分访问」且确实扫不到任何内容时提示，避免误报打扰用户
+            if (state.partialAccess && state.allAssets.isEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("当前是「部分照片访问」", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "系统只允许本 App 访问你勾选的部分照片，所以扫描结果会偏少。" +
+                                "可在系统设置里把照片权限改为「全部允许」。",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = {
+                            context.startActivity(
+                                android.content
+                                    .Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                    .apply {
+                                        data = android.net.Uri.parse("package:${context.packageName}")
+                                    },
+                            )
+                        }) { Text("去系统设置修改") }
+                    }
                 }
             }
 

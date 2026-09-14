@@ -1,8 +1,11 @@
 package com.example.photoorganizer.ui
 
+import android.Manifest
 import android.app.Application
 import android.content.IntentSender
+import android.content.pm.PackageManager
 import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.photoorganizer.data.DailyProgress
@@ -70,6 +73,8 @@ data class HomeUiState(
     val scanProgress: Int = 0,
     /** 最近处理记录（PRD 六·首页 / 9.5 操作日志）。 */
     val recentLogs: List<UserActionLogEntity> = emptyList(),
+    /** 是否为 Android 14+ 的「部分照片访问」模式。 */
+    val partialAccess: Boolean = false,
 ) {
     val current: MediaAsset? get() = queueItems.getOrNull(currentIndex)
     val remaining: Int get() = (queueItems.size - currentIndex).coerceAtLeast(0)
@@ -141,6 +146,20 @@ class HomeViewModel(
         }
         viewModelScope.launch {
             logDao.observeRecent(20).collect { list -> _uiState.update { it.copy(recentLogs = list) } }
+        }
+
+        // Android 14+「部分照片访问」检测：这种情况 App 只能看到用户勾选的少量照片，
+        // 若不给提示，用户会误以为扫描坏了（PRD 8.2.1 要求覆盖该场景）。
+        _uiState.update {
+            it.copy(
+                partialAccess =
+                    ContextCompat.checkSelfPermission(app, Manifest.permission.READ_MEDIA_IMAGES) ==
+                        PackageManager.PERMISSION_GRANTED &&
+                        ContextCompat.checkSelfPermission(
+                            app,
+                            Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
+                        ) == PackageManager.PERMISSION_GRANTED,
+            )
         }
 
         // 后台增量扫描：首次为空则全量，否则增量
@@ -238,7 +257,10 @@ class HomeViewModel(
     fun requestDelete() {
         val asset = _uiState.value.current ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val sender = coordinator.createDeleteRequest(listOf(asset.uri))?.intentSender
+            // 优先移入系统「最近删除」；系统不支持时才降级为永久删除
+            val sender =
+                (coordinator.createTrashRequest(listOf(asset.uri)) ?: coordinator.createDeleteRequest(listOf(asset.uri)))
+                    ?.intentSender
             if (sender == null) {
                 _uiState.update { it.copy(error = "无法发起系统删除确认") }
             } else {
@@ -348,7 +370,10 @@ class HomeViewModel(
         val uris = ids.mapNotNull { byId[it]?.uri }
         if (uris.isEmpty()) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val sender = coordinator.createDeleteRequest(uris)?.intentSender
+            // 批量同样优先走系统「最近删除」
+            val sender =
+                (coordinator.createTrashRequest(uris) ?: coordinator.createDeleteRequest(uris))
+                    ?.intentSender
             if (sender == null) {
                 _uiState.update { it.copy(error = "无法发起系统删除确认") }
             } else {

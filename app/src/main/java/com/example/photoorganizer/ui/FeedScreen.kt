@@ -252,8 +252,9 @@ fun FeedScreen(onExit: () -> Unit) {
             title = { Text("确认删除") },
             text = {
                 Text(
-                    "将删除《${state.current!!.displayName}》并移入系统最近删除（可在相册回收站恢复）。" +
-                        "此操作不能被本 App 撤销。",
+                    "《${state.current!!.displayName}》将移入系统「最近删除」，" +
+                        "可在系统相册的回收站中恢复（通常保留 30 天后自动清除）。" +
+                        "若系统不支持回收站，才会永久删除。",
                 )
             },
             confirmButton = {
