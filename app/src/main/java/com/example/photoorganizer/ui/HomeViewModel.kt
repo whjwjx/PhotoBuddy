@@ -72,12 +72,6 @@ data class HomeUiState(
     val albumLastAddedAt: Map<Long, Long> = emptyMap(),
     val openAlbumId: Long? = null,
     val openAlbumMediaIds: List<Long> = emptyList(),
-    val showBatch: Boolean = false,
-    /** 批量确认候选（已按安全策略剔除高风险项）。 */
-    val batchCandidates: List<MediaAsset> = emptyList(),
-    val selectedIds: Set<Long> = emptySet(),
-    val batchIdsInFlight: Set<Long> = emptySet(),
-    val pendingBatchDelete: IntentSender? = null,
     // --- P4：增量扫描 / 每日整理任务 ---
     val lastScanMs: Long = 0L,
     val lastSyncAdded: Int = 0,
@@ -108,25 +102,12 @@ data class HomeUiState(
                 it.status != MediaStatus.TRASH.value && it.status != MediaStatus.DELETE.value
             }
 
-    /** 安全策略命中的高风险项（收藏 / 最近拍摄），默认不进入批量删除。 */
-    val highRiskCount: Int get() = queueItems.count { isProtected(it) }
-
     /** 今日任务是否完成。 */
     val dailyDone: Boolean get() = daily.count >= settings.dailyGoal && settings.dailyGoal > 0
 
     /** 当前队列来源描述，写入操作日志（PRD 9.5 source）。 */
     val queueSource: String
         get() = queueType.label + (if (queueTitle.isNotEmpty()) " · $queueTitle" else "")
-
-    fun isProtected(asset: MediaAsset): Boolean =
-        (settings.protectFavorite && asset.isFavorite) ||
-            (
-                settings.protectRecentDays > 0 &&
-                    asset.capturedAt > 0 &&
-                    asset.capturedAt > System.currentTimeMillis() - settings.protectRecentDays * DAY_MS
-            )
-
-    val selectedBytes: Long get() = batchCandidates.filter { it.id in selectedIds }.sumOf { it.size }
 }
 
 class HomeViewModel(
@@ -484,74 +465,6 @@ class HomeViewModel(
         }
     }
 
-    // ---------------- 批量确认 ----------------
-
-    fun enterBatch() {
-        val s = _uiState.value
-        val candidates = s.queueItems.filter { !s.isProtected(it) }
-        _uiState.update {
-            it.copy(
-                showBatch = true,
-                batchCandidates = candidates,
-                selectedIds = candidates.map { a -> a.id }.toSet(),
-            )
-        }
-    }
-
-    fun exitBatch() {
-        _uiState.update { it.copy(showBatch = false, selectedIds = emptySet(), batchCandidates = emptyList()) }
-    }
-
-    fun toggleSelect(id: Long) {
-        _uiState.update { s ->
-            val next = if (id in s.selectedIds) s.selectedIds - id else s.selectedIds + id
-            s.copy(selectedIds = next)
-        }
-    }
-
-    fun selectAllBatch(on: Boolean) {
-        _uiState.update { s ->
-            s.copy(selectedIds = if (on) s.batchCandidates.map { it.id }.toSet() else emptySet())
-        }
-    }
-
-    /** 发起批量删除：按 [OrganizeSettings.batchChunkSize] 分批，避免系统 URI 数量上限。 */
-    fun confirmBatch() {
-        val s = _uiState.value
-        val chunk = s.settings.batchChunkSize.coerceAtLeast(1)
-        val ids = s.selectedIds.toList().take(chunk)
-        if (ids.isEmpty()) return
-        val byId = s.allAssets.associateBy { it.id }
-        val uris = ids.mapNotNull { byId[it]?.uri }
-        if (uris.isEmpty()) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // 批量同样优先走系统「最近删除」
-            val sender =
-                (coordinator.createTrashRequest(uris) ?: coordinator.createDeleteRequest(uris))
-                    ?.intentSender
-            if (sender == null) {
-                _uiState.update { it.copy(error = "无法发起系统删除确认") }
-            } else {
-                _uiState.update { it.copy(pendingBatchDelete = sender, batchIdsInFlight = ids.toSet()) }
-            }
-        } else {
-            viewModelScope.launch {
-                val okIds = ids.filter { id -> byId[id]?.let { coordinator.deleteToTrash(it) } == true }
-                finishBatch(okIds.toSet())
-            }
-        }
-    }
-
-    fun onBatchApproved() {
-        val ids = _uiState.value.batchIdsInFlight
-        if (ids.isEmpty()) return
-        viewModelScope.launch { finishBatch(ids) }
-    }
-
-    fun clearPendingBatch() {
-        _uiState.update { it.copy(pendingBatchDelete = null, batchIdsInFlight = emptySet()) }
-    }
-
     // ---------------- 恢复（App 内「最近删除」） ----------------
 
     /**
@@ -605,18 +518,6 @@ class HomeViewModel(
 
     // ---------------- 设置 ----------------
 
-    fun setProtectFavorite(v: Boolean) {
-        viewModelScope.launch { settingsRepo.setProtectFavorite(v) }
-    }
-
-    fun setProtectRecentDays(v: Int) {
-        viewModelScope.launch { settingsRepo.setProtectRecentDays(v) }
-    }
-
-    fun setBatchChunk(v: Int) {
-        viewModelScope.launch { settingsRepo.setBatchChunk(v) }
-    }
-
     fun setDailyGoal(v: Int) {
         viewModelScope.launch { settingsRepo.setDailyGoal(v) }
     }
@@ -634,10 +535,7 @@ class HomeViewModel(
                         currentIndex = 0,
                         processedCount = 0,
                         freedBytes = 0,
-                        selectedIds = emptySet(),
-                        batchIdsInFlight = emptySet(),
                         pendingDelete = null,
-                        pendingBatchDelete = null,
                         pendingRestore = null,
                         restoringLogId = null,
                         undo = null,
@@ -778,47 +676,6 @@ class HomeViewModel(
                     pendingDelete = null,
                     trashDeleteIdsInFlight = emptySet(),
                     undo = null,
-                ),
-            )
-        }
-    }
-
-    private suspend fun finishBatch(ids: Set<Long>) {
-        val byId = _uiState.value.allAssets.associateBy { it.id }
-        val source = _uiState.value.queueSource
-        var freed = 0L
-        ids.forEach { id ->
-            byId[id]?.let { asset ->
-                val before = dao.get(asset.id)?.status.orEmpty()
-                dao.upsert(toEntity(asset, MediaStatus.DELETE))
-                logDao.insert(
-                    UserActionLogEntity(
-                        mediaId = asset.id,
-                        mediaName = asset.displayName,
-                        mediaType = asset.mediaType.name,
-                        action = MediaStatus.DELETE.value,
-                        source = source,
-                        beforeState = before,
-                        afterState = MediaStatus.DELETE.value,
-                        freedBytes = asset.size,
-                        createdAt = System.currentTimeMillis(),
-                    ),
-                )
-                freed += asset.size
-            }
-        }
-        settingsRepo.addProcessed(ids.size)
-        _uiState.update { s ->
-            recompute(
-                s.copy(
-                    allAssets = s.allAssets.filter { it.id !in ids },
-                    freedBytes = s.freedBytes + freed,
-                    processedCount = s.processedCount + ids.size,
-                    selectedIds = s.selectedIds - ids,
-                    batchIdsInFlight = emptySet(),
-                    pendingBatchDelete = null,
-                    showBatch = false,
-                    currentIndex = 0,
                 ),
             )
         }

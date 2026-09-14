@@ -1,7 +1,6 @@
 package com.example.photoorganizer.data
 
 import android.content.Context
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -16,14 +15,8 @@ import java.util.Locale
 
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
-/** 整理与删除安全策略（PRD 六·设置 / 11.4 误删风险）。 */
+/** 整理节奏设置（PRD 六·设置）。 */
 data class OrganizeSettings(
-    /** 收藏内容默认不进入批量删除候选。 */
-    val protectFavorite: Boolean = true,
-    /** 最近 N 天拍摄的内容默认不进入批量删除候选，0 表示不保护。 */
-    val protectRecentDays: Int = 7,
-    /** 批量删除分批大小，避免系统请求 URI 数量上限（PRD 8.2.1）。 */
-    val batchChunkSize: Int = 50,
     /** 每日整理目标数量。 */
     val dailyGoal: Int = 20,
 )
@@ -40,9 +33,6 @@ class SettingsRepository(
     private val context: Context,
 ) {
     private object Keys {
-        val PROTECT_FAVORITE = booleanPreferencesKey("protect_favorite")
-        val PROTECT_RECENT_DAYS = intPreferencesKey("protect_recent_days")
-        val BATCH_CHUNK = intPreferencesKey("batch_chunk")
         val DAILY_GOAL = intPreferencesKey("daily_goal")
         val LAST_SCAN_MS = longPreferencesKey("last_scan_ms")
         val DAILY_DATE = stringPreferencesKey("daily_date")
@@ -52,9 +42,6 @@ class SettingsRepository(
     val settings: Flow<OrganizeSettings> =
         context.settingsDataStore.data.map { p ->
             OrganizeSettings(
-                protectFavorite = p[Keys.PROTECT_FAVORITE] ?: true,
-                protectRecentDays = p[Keys.PROTECT_RECENT_DAYS] ?: 7,
-                batchChunkSize = p[Keys.BATCH_CHUNK] ?: 50,
                 dailyGoal = p[Keys.DAILY_GOAL] ?: 20,
             )
         }
@@ -68,18 +55,6 @@ class SettingsRepository(
                 DailyProgress(today(), 0)
             }
         }
-
-    suspend fun setProtectFavorite(v: Boolean) {
-        context.settingsDataStore.edit { it[Keys.PROTECT_FAVORITE] = v }
-    }
-
-    suspend fun setProtectRecentDays(v: Int) {
-        context.settingsDataStore.edit { it[Keys.PROTECT_RECENT_DAYS] = v }
-    }
-
-    suspend fun setBatchChunk(v: Int) {
-        context.settingsDataStore.edit { it[Keys.BATCH_CHUNK] = v }
-    }
 
     suspend fun setDailyGoal(v: Int) {
         context.settingsDataStore.edit { it[Keys.DAILY_GOAL] = v }
