@@ -1302,7 +1302,7 @@ private fun EmptyQueue(
         } else {
             "下一组建议「${nextQueue.displayName}」：${nextQueue.items.size} 项" +
                 if (nextQueue.estimatedSavingBytes > 0L) {
-                    " · 预计可释放 ${formatBytes(nextQueue.estimatedSavingBytes)}"
+                    " · 合计 ${formatBytes(nextQueue.estimatedSavingBytes)}"
                 } else {
                     ""
                 }
