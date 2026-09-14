@@ -41,6 +41,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,6 +92,9 @@ fun AppRoot(initialTab: AppTab = AppTab.HOME) {
     }
 
     var tab by remember { mutableStateOf(initialTab) }
+    LaunchedEffect(initialTab) {
+        tab = initialTab
+    }
     Scaffold(
         // 刷照片流是全屏沉浸式，隐藏底部导航
         bottomBar = {

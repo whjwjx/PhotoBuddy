@@ -102,7 +102,7 @@ fun SettingsScreen() {
 
             SettingsCard(title = "整理提醒") {
                 Text(
-                    "开启后，后台每日扫描时如果还有未整理照片，并且今日目标未完成，会发一条温和提醒。",
+                    "开启后，后台扫描发现还有未整理照片，并且今日目标未完成时，会发一条温和提醒。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -115,9 +115,9 @@ fun SettingsScreen() {
                         Text("每日轻提醒", style = MaterialTheme.typography.titleSmall)
                         Text(
                             if (s.reminderEnabled) {
-                                "每 ${s.reminderIntervalDays} 天最多一次，静默 ${s.quietStartHour}:00-${s.quietEndHour}:00。"
+                                "每 ${s.reminderIntervalDays} 天最多一次，静默 ${s.quietStartHour}:00-${s.quietEndHour}:00；点通知会直接进入短队列。"
                             } else {
-                                "关闭后只保留首页今日进度。"
+                                "关闭后只保留首页和统计页的今日进度。"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -209,6 +209,21 @@ fun SettingsScreen() {
                 )
             }
 
+            SettingsCard(title = "系统影响边界") {
+                SettingsPlainRow(
+                    title = "相册归类",
+                    body = "当前创建的是 App 内标签，不移动、复制或删除系统相册文件。",
+                )
+                SettingsPlainRow(
+                    title = "删除照片",
+                    body = "只有在待删除复核页确认，并通过系统弹窗后，才会影响系统相册。",
+                )
+                SettingsPlainRow(
+                    title = "一键还原",
+                    body = "只还原 App 内整理状态，无法恢复已经被系统确认删除的真实文件。",
+                )
+            }
+
             if (isDebuggable) {
                 SettingsCard(title = "测试工具") {
                     Text(
@@ -247,6 +262,21 @@ fun SettingsScreen() {
                     Text("取消")
                 }
             },
+        )
+    }
+}
+
+@Composable
+private fun SettingsPlainRow(
+    title: String,
+    body: String,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall)
+        Text(
+            body,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

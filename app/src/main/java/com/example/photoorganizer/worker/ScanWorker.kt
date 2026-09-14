@@ -85,8 +85,8 @@ class ScanWorker(
         val notification =
             NotificationCompat.Builder(applicationContext, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_menu_gallery)
-                .setContentTitle("今天整理 ${settings.dailyGoal} 张照片")
-                .setContentText("还有 $remaining 张未整理，打开后从短队列继续。")
+                .setContentTitle("今天轻整理 ${settings.dailyGoal} 张照片")
+                .setContentText("还有 $remaining 张未整理，点开直接进入短队列。")
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
