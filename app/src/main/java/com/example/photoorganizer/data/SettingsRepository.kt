@@ -41,6 +41,7 @@ class SettingsRepository(
         val DAILY_DATE = stringPreferencesKey("daily_date")
         val DAILY_COUNT = intPreferencesKey("daily_count")
         val PINNED_ALBUM_IDS = stringPreferencesKey("pinned_album_ids")
+        val HIDDEN_ALBUM_IDS = stringPreferencesKey("hidden_album_ids")
         val REMINDER_ENABLED = booleanPreferencesKey("reminder_enabled")
     }
 
@@ -65,6 +66,9 @@ class SettingsRepository(
     val pinnedAlbumIds: Flow<Set<Long>> =
         context.settingsDataStore.data.map { p -> parseIdSet(p[Keys.PINNED_ALBUM_IDS].orEmpty()) }
 
+    val hiddenAlbumIds: Flow<Set<Long>> =
+        context.settingsDataStore.data.map { p -> parseIdSet(p[Keys.HIDDEN_ALBUM_IDS].orEmpty()) }
+
     suspend fun setDailyGoal(v: Int) {
         context.settingsDataStore.edit { it[Keys.DAILY_GOAL] = v }
     }
@@ -81,6 +85,17 @@ class SettingsRepository(
             val current = parseIdSet(p[Keys.PINNED_ALBUM_IDS].orEmpty())
             val next = if (pinned) current + albumId else current - albumId
             p[Keys.PINNED_ALBUM_IDS] = next.sorted().joinToString(",")
+        }
+    }
+
+    suspend fun setAlbumHidden(
+        albumId: Long,
+        hidden: Boolean,
+    ) {
+        context.settingsDataStore.edit { p ->
+            val current = parseIdSet(p[Keys.HIDDEN_ALBUM_IDS].orEmpty())
+            val next = if (hidden) current + albumId else current - albumId
+            p[Keys.HIDDEN_ALBUM_IDS] = next.sorted().joinToString(",")
         }
     }
 

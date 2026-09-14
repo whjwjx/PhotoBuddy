@@ -123,6 +123,7 @@ fun AlbumsScreen() {
                 onDelete = { deleteTarget = it },
                 onShowMapping = { mappingTarget = it },
                 onTogglePin = { albumId, pinned -> vm.setAlbumPinned(albumId, pinned) },
+                onToggleHidden = { albumId, hidden -> vm.setAlbumHidden(albumId, hidden) },
                 modifier = Modifier.padding(padding),
             )
         } else {
@@ -189,6 +190,7 @@ private fun AlbumList(
     onDelete: (AlbumEntity) -> Unit,
     onShowMapping: (AlbumEntity) -> Unit,
     onTogglePin: (Long, Boolean) -> Unit,
+    onToggleHidden: (Long, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -237,12 +239,13 @@ private fun AlbumList(
         )
 
         val sortedAlbums =
-            remember(state.albums, state.albumCounts, state.albumLastAddedAt) {
+            remember(state.albums, state.albumCounts, state.albumLastAddedAt, state.pinnedAlbumIds, state.hiddenAlbumIds) {
                 sortAlbumsForManagement(
                     albums = state.albums,
                     counts = state.albumCounts,
                     lastAddedAt = state.albumLastAddedAt,
                     pinnedAlbumIds = state.pinnedAlbumIds,
+                    hiddenAlbumIds = state.hiddenAlbumIds,
                 )
             }
         val visibleAlbums =
@@ -266,11 +269,13 @@ private fun AlbumList(
                         count = state.albumCounts[album.id] ?: 0,
                         lastAddedAt = state.albumLastAddedAt[album.id] ?: 0L,
                         pinned = album.id in state.pinnedAlbumIds,
+                        hidden = album.id in state.hiddenAlbumIds,
                         onOpen = { onOpen(album.id) },
                         onRename = { onRename(album) },
                         onDelete = { onDelete(album) },
                         onShowMapping = { onShowMapping(album) },
                         onTogglePin = { onTogglePin(album.id, album.id !in state.pinnedAlbumIds) },
+                        onToggleHidden = { onToggleHidden(album.id, album.id !in state.hiddenAlbumIds) },
                     )
                 }
             }
@@ -286,11 +291,13 @@ private fun AlbumRow(
     count: Int,
     lastAddedAt: Long,
     pinned: Boolean,
+    hidden: Boolean,
     onOpen: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
     onShowMapping: () -> Unit,
     onTogglePin: () -> Unit,
+    onToggleHidden: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     Card(
@@ -315,6 +322,7 @@ private fun AlbumRow(
                     buildString {
                         append("$count 项")
                         if (pinned) append(" · 已置顶")
+                        if (hidden) append(" · 已隐藏于快捷区")
                         append(" · App 内标签")
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -337,6 +345,13 @@ private fun AlbumRow(
                         onClick = {
                             menuExpanded = false
                             onTogglePin()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (hidden) "显示在整理页" else "从整理页隐藏") },
+                        onClick = {
+                            menuExpanded = false
+                            onToggleHidden()
                         },
                     )
                     DropdownMenuItem(
@@ -533,9 +548,11 @@ private fun sortAlbumsForManagement(
     counts: Map<Long, Int>,
     lastAddedAt: Map<Long, Long>,
     pinnedAlbumIds: Set<Long>,
+    hiddenAlbumIds: Set<Long>,
 ): List<AlbumEntity> =
     albums.sortedWith(
         compareByDescending<AlbumEntity> { if (it.id in pinnedAlbumIds) 1 else 0 }
+            .thenBy { if (it.id in hiddenAlbumIds) 1 else 0 }
             .thenByDescending { lastAddedAt[it.id] ?: 0L }
             .thenByDescending { counts[it.id] ?: 0 }
             .thenByDescending { it.createdAt }

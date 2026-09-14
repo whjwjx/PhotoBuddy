@@ -211,6 +211,7 @@ fun FeedScreen(
             counts = state.albumCounts,
             lastAddedAt = state.albumLastAddedAt,
             pinnedAlbumIds = state.pinnedAlbumIds,
+            hiddenAlbumIds = state.hiddenAlbumIds,
             onCreateAndPick = {
                 vm.createAlbumAndAddCurrent(it)
                 showAddAlbum = false
@@ -582,12 +583,13 @@ private fun AlbumQuickBar(
     onMore: () -> Unit,
 ) {
     val quickAlbums =
-        remember(state.albums, state.albumCounts, state.albumLastAddedAt, state.pinnedAlbumIds) {
+        remember(state.albums, state.albumCounts, state.albumLastAddedAt, state.pinnedAlbumIds, state.hiddenAlbumIds) {
             sortedAlbumsForOrganize(
-                albums = state.albums,
+                albums = state.albums.filter { it.id !in state.hiddenAlbumIds },
                 counts = state.albumCounts,
                 lastAddedAt = state.albumLastAddedAt,
                 pinnedAlbumIds = state.pinnedAlbumIds,
+                hiddenAlbumIds = state.hiddenAlbumIds,
             ).take(6)
         }
     Box(
@@ -647,6 +649,7 @@ private fun AlbumPickerSheet(
     counts: Map<Long, Int>,
     lastAddedAt: Map<Long, Long>,
     pinnedAlbumIds: Set<Long>,
+    hiddenAlbumIds: Set<Long>,
     onCreateAndPick: (String) -> Unit,
     onPick: (Long) -> Unit,
     onDismiss: () -> Unit,
@@ -655,18 +658,19 @@ private fun AlbumPickerSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val trimmedQuery = query.trim()
     val sortedAlbums =
-        remember(albums, counts, lastAddedAt, pinnedAlbumIds) {
+        remember(albums, counts, lastAddedAt, pinnedAlbumIds, hiddenAlbumIds) {
             sortedAlbumsForOrganize(
                 albums = albums,
                 counts = counts,
                 lastAddedAt = lastAddedAt,
                 pinnedAlbumIds = pinnedAlbumIds,
+                hiddenAlbumIds = hiddenAlbumIds,
             )
         }
-    val pinnedAlbums = sortedAlbums.filter { it.id in pinnedAlbumIds }.take(6)
+    val pinnedAlbums = sortedAlbums.filter { it.id in pinnedAlbumIds && it.id !in hiddenAlbumIds }.take(6)
     val recentAlbums =
         sortedAlbums
-            .filter { it.id !in pinnedAlbumIds && (lastAddedAt[it.id] ?: 0L) > 0L }
+            .filter { it.id !in pinnedAlbumIds && it.id !in hiddenAlbumIds && (lastAddedAt[it.id] ?: 0L) > 0L }
             .take(5)
     val filtered =
         sortedAlbums.filter {
@@ -760,6 +764,7 @@ private fun AlbumPickerSheet(
                                 Text(
                                     buildString {
                                         append("$count 项 · App 内标签")
+                                        if (album.id in hiddenAlbumIds) append(" · 已隐藏于快捷区")
                                         if (recent > 0L) append(" · 最近 ${formatDate(recent)}")
                                     },
                                     style = MaterialTheme.typography.bodySmall,
@@ -801,9 +806,11 @@ private fun sortedAlbumsForOrganize(
     counts: Map<Long, Int>,
     lastAddedAt: Map<Long, Long>,
     pinnedAlbumIds: Set<Long>,
+    hiddenAlbumIds: Set<Long> = emptySet(),
 ): List<AlbumEntity> =
     albums.sortedWith(
         compareByDescending<AlbumEntity> { if (it.id in pinnedAlbumIds) 1 else 0 }
+            .thenBy { if (it.id in hiddenAlbumIds) 1 else 0 }
             .thenByDescending { lastAddedAt[it.id] ?: 0L }
             .thenByDescending { counts[it.id] ?: 0 }
             .thenByDescending { it.createdAt }

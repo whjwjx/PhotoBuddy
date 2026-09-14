@@ -71,6 +71,7 @@ data class HomeUiState(
     val albumMediaIds: Map<Long, List<Long>> = emptyMap(),
     val albumLastAddedAt: Map<Long, Long> = emptyMap(),
     val pinnedAlbumIds: Set<Long> = emptySet(),
+    val hiddenAlbumIds: Set<Long> = emptySet(),
     val openAlbumId: Long? = null,
     val openAlbumMediaIds: List<Long> = emptyList(),
     // --- P4：增量扫描 / 每日整理任务 ---
@@ -171,6 +172,9 @@ class HomeViewModel(
         }
         viewModelScope.launch {
             settingsRepo.pinnedAlbumIds.collect { ids -> _uiState.update { it.copy(pinnedAlbumIds = ids) } }
+        }
+        viewModelScope.launch {
+            settingsRepo.hiddenAlbumIds.collect { ids -> _uiState.update { it.copy(hiddenAlbumIds = ids) } }
         }
         viewModelScope.launch {
             logDao.observeRecent(20).collect { list -> _uiState.update { it.copy(recentLogs = list) } }
@@ -413,6 +417,7 @@ class HomeViewModel(
             albumDao.deleteAlbumItems(albumId)
             albumDao.deleteAlbum(albumId)
             settingsRepo.setAlbumPinned(albumId, false)
+            settingsRepo.setAlbumHidden(albumId, false)
             _uiState.update { s ->
                 if (s.openAlbumId == albumId) {
                     s.copy(openAlbumId = null, openAlbumMediaIds = emptyList())
@@ -429,6 +434,15 @@ class HomeViewModel(
     ) {
         viewModelScope.launch {
             settingsRepo.setAlbumPinned(albumId, pinned)
+        }
+    }
+
+    fun setAlbumHidden(
+        albumId: Long,
+        hidden: Boolean,
+    ) {
+        viewModelScope.launch {
+            settingsRepo.setAlbumHidden(albumId, hidden)
         }
     }
 
