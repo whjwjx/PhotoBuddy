@@ -22,11 +22,14 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -34,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.photoorganizer.data.local.UserActionLogEntity
 import com.example.photoorganizer.domain.MediaQueue
 import com.example.photoorganizer.domain.QueueType
 import com.example.photoorganizer.domain.StatsService
@@ -47,7 +51,14 @@ fun StatsScreen(
 ) {
     val vm: HomeViewModel = viewModel()
     val state by vm.uiState.collectAsState()
+    var showTodayLogs by remember { mutableStateOf(false) }
     val stats = remember(state.assets) { StatsService.compute(state.assets) }
+    val todayLogs =
+        remember(state.recentLogs, state.daily.date) {
+            state.recentLogs
+                .filter { log -> state.daily.date.isBlank() || formatDate(log.createdAt).startsWith(state.daily.date) }
+                .take(6)
+        }
     val organizedProgress =
         remember(stats.total, state.organizedCount) {
             if (stats.total == 0) 0f else (state.organizedCount.toFloat() / stats.total).coerceIn(0f, 1f)
@@ -93,8 +104,14 @@ fun StatsScreen(
                     icon = Icons.Default.Done,
                     label = "今日",
                     value = "${state.daily.count}/${state.settings.dailyGoal}",
-                    helper = if (state.dailyDone) "今日目标已完成" else "轻整理目标",
+                    helper =
+                        if (state.dailyDone) {
+                            "今日目标已完成"
+                        } else {
+                            if (todayLogs.isEmpty()) "轻整理目标" else "点看今日记录"
+                        },
                     modifier = Modifier.weight(1f),
+                    onClick = { showTodayLogs = !showTodayLogs },
                 )
                 StatMetricCard(
                     icon = Icons.Default.DeleteOutline,
@@ -129,6 +146,14 @@ fun StatsScreen(
                 )
             }
 
+            if (showTodayLogs) {
+                TodayActivityCard(
+                    logs = todayLogs,
+                    undoAvailable = state.undo != null,
+                    onUndo = { vm.undoLast() },
+                )
+            }
+
             Text("队列进度", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             queueProgressItems.forEach { queue ->
                 QueueProgressRow(
@@ -141,6 +166,64 @@ fun StatsScreen(
                         }
                     },
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TodayActivityCard(
+    logs: List<UserActionLogEntity>,
+    undoAvailable: Boolean,
+    onUndo: () -> Unit,
+) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("今日记录", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (logs.isEmpty()) {
+                            "今天还没有整理动作。"
+                        } else {
+                            "最近 ${logs.size} 次动作会显示在这里。"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (undoAvailable) {
+                    TextButton(onClick = onUndo) {
+                        Text("撤销最近一步")
+                    }
+                }
+            }
+            logs.forEach { log ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            log.mediaName,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            "${log.source} · ${formatDate(log.createdAt)}",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        actionLabel(log),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
         }
     }

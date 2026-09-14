@@ -258,7 +258,10 @@ private fun RecentActivityCard(logs: List<UserActionLogEntity>) {
                 )
             }
             logs.forEach { log ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             log.mediaName,
@@ -437,16 +440,3 @@ private fun QueueCard(
         }
     }
 }
-
-private fun actionLabel(log: UserActionLogEntity): String =
-    when (log.action) {
-        "keep" -> "已保留"
-        "later" -> "稍后"
-        "trash" -> "待删除"
-        "favorite" -> "已收藏"
-        "delete" -> if (log.freedBytes > 0) "已删除 ${formatBytes(log.freedBytes)}" else "已删除"
-        "restore" -> "已恢复"
-        "undo" -> "已撤销"
-        "permanent" -> "永久保留"
-        else -> log.action
-    }

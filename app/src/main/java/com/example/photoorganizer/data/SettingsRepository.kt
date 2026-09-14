@@ -144,7 +144,7 @@ class SettingsRepository(
         context.settingsDataStore.edit { p ->
             val cur = if (p[Keys.DAILY_DATE] == today()) p[Keys.DAILY_COUNT] ?: 0 else 0
             p[Keys.DAILY_DATE] = today()
-            p[Keys.DAILY_COUNT] = cur + n
+            p[Keys.DAILY_COUNT] = (cur + n).coerceAtLeast(0)
         }
     }
 
