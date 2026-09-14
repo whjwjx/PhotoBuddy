@@ -253,7 +253,8 @@ class HomeViewModel(
     /** 刷照片流滑动到某一页时同步索引，保证操作作用于当前可见的卡片。 */
     fun setIndex(index: Int) {
         _uiState.update { s ->
-            if (s.currentIndex == index) s else s.copy(currentIndex = index.coerceIn(0, s.queueItems.size))
+            val safeIndex = if (s.queueItems.isEmpty()) 0 else index.coerceIn(0, s.queueItems.lastIndex)
+            if (s.currentIndex == safeIndex) s else s.copy(currentIndex = safeIndex)
         }
     }
 
@@ -708,7 +709,7 @@ class HomeViewModel(
             queues = queues,
             queueTitle = picked?.title.orEmpty(),
             queueItems = items,
-            currentIndex = s.currentIndex.coerceIn(0, items.size),
+            currentIndex = if (items.isEmpty()) 0 else s.currentIndex.coerceIn(0, items.lastIndex),
         )
     }
 
