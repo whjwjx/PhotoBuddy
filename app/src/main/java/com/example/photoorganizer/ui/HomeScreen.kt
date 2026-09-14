@@ -43,7 +43,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -70,7 +72,13 @@ fun HomeScreen(
     val vm: HomeViewModel = viewModel()
     val state by vm.uiState.collectAsState()
     val context = LocalContext.current
+    var showAllQueues by remember { mutableStateOf(false) }
     val stats = remember(state.assets) { StatsService.compute(state.assets) }
+    val homeQueues = remember(state.queues) { buildHomeQueues(state.queues) }
+    val visibleQueues =
+        remember(homeQueues, showAllQueues) {
+            if (showAllQueues) homeQueues else homeQueues.take(4)
+        }
     val primaryQueue =
         remember(state.queues) {
             state.queues.firstOrNull { it.type == QueueType.RANDOM && it.items.isNotEmpty() }
@@ -124,7 +132,7 @@ fun HomeScreen(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        "一次只看一张。上滑待删除，下滑收藏，左右滑保留或稍后。",
+                        "像 Slidebox 一样，一次只判断一张。",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -198,16 +206,27 @@ fun HomeScreen(
                 onClick = onOpenTrash,
             )
 
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("短队列", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "优先显示现在能继续整理的队列",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("短队列", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (homeQueues.size > 4 && !showAllQueues) {
+                            "精选 ${visibleQueues.size} 个入口，展开可测试全部队列"
+                        } else {
+                            "所有队列入口都可直接验证"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (homeQueues.size > 4) {
+                    TextButton(onClick = { showAllQueues = !showAllQueues }) {
+                        Text(if (showAllQueues) "收起" else "全部")
+                    }
+                }
             }
             QueueGrid(
-                queues = state.queues,
+                queues = visibleQueues,
                 onPick = { queue ->
                     vm.selectQueue(queue)
                     onStartOrganize()
@@ -356,24 +375,8 @@ private fun QueueGrid(
     queues: List<MediaQueue>,
     onPick: (MediaQueue) -> Unit,
 ) {
-    val priority =
-        listOf(
-            QueueType.RANDOM,
-            QueueType.UNPROCESSED,
-            QueueType.SIMILAR,
-            QueueType.SCREENSHOT,
-            QueueType.LARGE_VIDEO,
-            QueueType.RECENT_30,
-            QueueType.FAVORITE,
-        )
-    val preferred = priority.mapNotNull { type -> queues.firstOrNull { it.type == type } }
-    val monthQueues = queues.filter { it.type == QueueType.MONTH && it.items.isNotEmpty() }
-    val picked =
-        (preferred.filter { it.items.isNotEmpty() } + monthQueues + preferred)
-            .distinctBy { it.type to it.title }
-            .take(4)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        picked.chunked(2).forEach { row ->
+        queues.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 row.forEach { queue ->
                     QueueCard(
@@ -397,6 +400,23 @@ private fun QueueGrid(
             }
         }
     }
+}
+
+private fun buildHomeQueues(queues: List<MediaQueue>): List<MediaQueue> {
+    val priority =
+        listOf(
+            QueueType.RANDOM,
+            QueueType.UNPROCESSED,
+            QueueType.SIMILAR,
+            QueueType.SCREENSHOT,
+            QueueType.LARGE_VIDEO,
+            QueueType.RECENT_30,
+            QueueType.FAVORITE,
+        )
+    val preferred = priority.mapNotNull { type -> queues.firstOrNull { it.type == type } }
+    val monthQueues = queues.filter { it.type == QueueType.MONTH && it.items.isNotEmpty() }
+    return (preferred.filter { it.items.isNotEmpty() } + monthQueues + preferred)
+        .distinctBy { it.type to it.title }
 }
 
 @Composable
