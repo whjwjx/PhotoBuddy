@@ -82,6 +82,7 @@ import com.example.photoorganizer.data.MediaAsset
 import com.example.photoorganizer.data.MediaType
 import com.example.photoorganizer.data.local.AlbumEntity
 import com.example.photoorganizer.data.local.MediaStatus
+import com.example.photoorganizer.domain.MediaQueue
 import com.example.photoorganizer.domain.QueueType
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -104,10 +105,25 @@ fun FeedScreen(
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         val asset = state.current
         if (asset == null) {
+            val nextQueue = remember(state.queues, state.queueType, state.queueTitle) { suggestedNextQueue(state) }
             EmptyQueue(
-                title = if (state.queueItems.isEmpty()) "这个队列没有内容" else "这个队列刷完啦",
+                title = if (state.undo != null) "这个队列刷完啦" else "这个队列没有内容",
+                nextQueue = nextQueue,
+                onNextQueue = {
+                    nextQueue?.let { vm.selectQueue(it) }
+                },
                 onExit = onExit,
                 onQueue = { showQueue = true },
+            )
+            UndoBanner(
+                visible = state.undo != null,
+                message = state.undo?.message.orEmpty(),
+                onUndo = { vm.undoLast() },
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 24.dp),
             )
         } else {
             FeedPage(
@@ -804,6 +820,8 @@ private fun similarMeta(asset: MediaAsset): String =
 @Composable
 private fun EmptyQueue(
     title: String,
+    nextQueue: MediaQueue?,
+    onNextQueue: () -> Unit,
     onExit: () -> Unit,
     onQueue: () -> Unit,
 ) {
@@ -823,14 +841,48 @@ private fun EmptyQueue(
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            "换一个短队列，或者回首页看看待删除。",
+            if (nextQueue == null) {
+                "所有可见队列都整理完了，可以回首页看看待删除。"
+            } else {
+                "可以继续处理「${nextQueue.displayName}」，让整理节奏不断掉。"
+            },
             color = Color.White.copy(alpha = 0.72f),
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(20.dp))
+        if (nextQueue != null) {
+            Button(onClick = onNextQueue) {
+                Text("继续 ${nextQueue.displayName} · ${nextQueue.items.size} 项")
+            }
+            Spacer(Modifier.height(8.dp))
+        }
         Button(onClick = onQueue) { Text("选择队列") }
         TextButton(onClick = onExit) { Text("回首页", color = Color.White) }
     }
+}
+
+private fun suggestedNextQueue(state: HomeUiState): MediaQueue? {
+    val priority =
+        listOf(
+            QueueType.RANDOM,
+            QueueType.UNPROCESSED,
+            QueueType.SIMILAR,
+            QueueType.SCREENSHOT,
+            QueueType.LARGE_VIDEO,
+            QueueType.RECENT_30,
+            QueueType.FAVORITE,
+            QueueType.MONTH,
+        )
+    return state.queues
+        .asSequence()
+        .filter { it.items.isNotEmpty() }
+        .filterNot { it.type == state.queueType && it.title == state.queueTitle }
+        .sortedWith(
+            compareBy<MediaQueue> { queue ->
+                priority.indexOf(queue.type).let { if (it < 0) priority.size else it }
+            }.thenByDescending { it.items.size },
+        )
+        .firstOrNull()
 }
 
 @Composable
