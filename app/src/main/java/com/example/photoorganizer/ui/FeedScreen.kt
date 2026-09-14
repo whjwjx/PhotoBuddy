@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -99,9 +100,17 @@ fun FeedScreen(
     val state by vm.uiState.collectAsState()
     var showAddAlbum by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
+    var showExitReview by remember { mutableStateOf(false) }
     var albumActionTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var dragX by remember { mutableStateOf(0f) }
     var dragY by remember { mutableStateOf(0f) }
+    val requestExit = {
+        if (state.trashCount > 0) {
+            showExitReview = true
+        } else {
+            onExit()
+        }
+    }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         val asset = state.current
@@ -113,7 +122,7 @@ fun FeedScreen(
                 onNextQueue = {
                     nextQueue?.let { vm.selectQueue(it) }
                 },
-                onExit = onExit,
+                onExit = requestExit,
                 onQueue = { showQueue = true },
             )
             UndoBanner(
@@ -151,7 +160,7 @@ fun FeedScreen(
                 total = state.queueItems.size,
                 remaining = state.remaining,
                 trashCount = state.trashCount,
-                onExit = onExit,
+                onExit = requestExit,
                 onOpenTrash = onOpenTrash,
                 onQueue = { showQueue = true },
             )
@@ -239,6 +248,22 @@ fun FeedScreen(
         )
     }
 
+    if (showExitReview) {
+        ExitReviewDialog(
+            trashCount = state.trashCount,
+            trashBytes = state.trashBytes,
+            onReview = {
+                showExitReview = false
+                onOpenTrash()
+            },
+            onKeepOrganizing = { showExitReview = false },
+            onExitAnyway = {
+                showExitReview = false
+                onExit()
+            },
+        )
+    }
+
     if (showQueue) {
         QueueFilterSheet(
             state = state,
@@ -251,6 +276,41 @@ fun FeedScreen(
             onDismiss = { showQueue = false },
         )
     }
+}
+
+@Composable
+private fun ExitReviewDialog(
+    trashCount: Int,
+    trashBytes: Long,
+    onReview: () -> Unit,
+    onKeepOrganizing: () -> Unit,
+    onExitAnyway: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onKeepOrganizing,
+        title = { Text("还有待删除未复核") },
+        text = {
+            Text(
+                "$trashCount 张照片正在待删除里，预计可释放 ${formatBytes(trashBytes)}。确认前不会删除，" +
+                    "你可以现在去复核，也可以稍后再处理。",
+            )
+        },
+        confirmButton = {
+            Button(onClick = onReview) {
+                Text("去复核")
+            }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onKeepOrganizing) {
+                    Text("继续整理")
+                }
+                TextButton(onClick = onExitAnyway) {
+                    Text("仍然关闭")
+                }
+            }
+        },
+    )
 }
 
 @Composable
