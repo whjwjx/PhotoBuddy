@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
@@ -58,10 +59,24 @@ internal fun FilterChipButton(
 internal fun QueueFilterSheet(
     state: HomeUiState,
     onFilterType: (com.example.photoorganizer.data.MediaType?) -> Unit,
+    onFilterBucket: (String?) -> Unit,
     onSelectQueue: (com.example.photoorganizer.domain.MediaQueue) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val bucketOptions =
+        state.allAssets
+            .asSequence()
+            .filter { state.filterType == null || it.mediaType == state.filterType }
+            .groupBy { it.bucketId.ifBlank { it.bucketName.ifBlank { "unknown" } } }
+            .map { (bucketId, assets) ->
+                BucketFilterOption(
+                    id = bucketId,
+                    name = assets.firstOrNull()?.bucketName?.ifBlank { "未知相册" } ?: "未知相册",
+                    count = assets.size,
+                )
+            }
+            .sortedWith(compareByDescending<BucketFilterOption> { it.count }.thenBy { it.name })
     val sortedQueues =
         state.queues.sortedWith(
             compareByDescending<com.example.photoorganizer.domain.MediaQueue> { it.items.isNotEmpty() }
@@ -105,6 +120,25 @@ internal fun QueueFilterSheet(
                 }
                 FilterChipButton("视频", state.filterType == com.example.photoorganizer.data.MediaType.VIDEO) {
                     onFilterType(com.example.photoorganizer.data.MediaType.VIDEO)
+                }
+            }
+            if (bucketOptions.isNotEmpty()) {
+                Text("系统相册", style = MaterialTheme.typography.labelLarge)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    item {
+                        FilterChipButton(
+                            text = "全部相册 · ${bucketOptions.sumOf { it.count }}",
+                            selected = state.filterBucket == null,
+                            onClick = { onFilterBucket(null) },
+                        )
+                    }
+                    items(bucketOptions, key = { it.id }) { bucket ->
+                        FilterChipButton(
+                            text = "${bucket.name} · ${bucket.count}",
+                            selected = state.filterBucket == bucket.id,
+                            onClick = { onFilterBucket(bucket.id) },
+                        )
+                    }
                 }
             }
             Text("推荐队列", style = MaterialTheme.typography.labelLarge)
@@ -153,3 +187,9 @@ internal fun QueueFilterSheet(
         }
     }
 }
+
+private data class BucketFilterOption(
+    val id: String,
+    val name: String,
+    val count: Int,
+)
