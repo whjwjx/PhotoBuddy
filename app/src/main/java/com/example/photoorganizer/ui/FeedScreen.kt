@@ -171,6 +171,7 @@ fun FeedScreen(
         AlbumPickerSheet(
             albums = state.albums,
             counts = state.albumCounts,
+            lastAddedAt = state.albumLastAddedAt,
             onCreateAndPick = {
                 vm.createAlbumAndAddCurrent(it)
                 showAddAlbum = false
@@ -419,6 +420,14 @@ private fun AlbumQuickBar(
     onPick: (Long) -> Unit,
     onMore: () -> Unit,
 ) {
+    val quickAlbums =
+        remember(state.albums, state.albumCounts, state.albumLastAddedAt) {
+            sortedAlbumsForOrganize(
+                albums = state.albums,
+                counts = state.albumCounts,
+                lastAddedAt = state.albumLastAddedAt,
+            ).take(6)
+        }
     Box(
         Modifier
             .fillMaxWidth()
@@ -429,7 +438,7 @@ private fun AlbumQuickBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            items(state.albums.take(6)) { album ->
+            items(quickAlbums) { album ->
                 AlbumChip(
                     text = album.name,
                     onClick = { onPick(album.id) },
@@ -474,6 +483,7 @@ private fun AlbumChip(
 private fun AlbumPickerSheet(
     albums: List<AlbumEntity>,
     counts: Map<Long, Int>,
+    lastAddedAt: Map<Long, Long>,
     onCreateAndPick: (String) -> Unit,
     onPick: (Long) -> Unit,
     onDismiss: () -> Unit,
@@ -481,8 +491,17 @@ private fun AlbumPickerSheet(
     var query by remember { mutableStateOf("") }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val trimmedQuery = query.trim()
+    val sortedAlbums =
+        remember(albums, counts, lastAddedAt) {
+            sortedAlbumsForOrganize(
+                albums = albums,
+                counts = counts,
+                lastAddedAt = lastAddedAt,
+            )
+        }
+    val recentAlbums = sortedAlbums.filter { (lastAddedAt[it.id] ?: 0L) > 0L }.take(5)
     val filtered =
-        albums.filter {
+        sortedAlbums.filter {
             query.isBlank() || it.name.contains(trimmedQuery, ignoreCase = true)
         }
     ModalBottomSheet(
@@ -511,13 +530,25 @@ private fun AlbumPickerSheet(
             ) {
                 Text(
                     if (trimmedQuery.isEmpty()) {
-                        "输入名称后新建相册"
+                        "输入名称后创建"
                     } else {
                         "新建并加入「$trimmedQuery」"
                     },
                 )
             }
-            Text("已有相册", style = MaterialTheme.typography.labelLarge)
+            if (trimmedQuery.isBlank() && recentAlbums.isNotEmpty()) {
+                Text("最近使用", style = MaterialTheme.typography.labelLarge)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(recentAlbums, key = { it.id }) { album ->
+                        AlbumSheetChip(
+                            text = album.name,
+                            count = counts[album.id] ?: 0,
+                            onClick = { onPick(album.id) },
+                        )
+                    }
+                }
+            }
+            Text("全部相册", style = MaterialTheme.typography.labelLarge)
             if (filtered.isEmpty()) {
                 Text(
                     if (albums.isEmpty()) {
@@ -533,6 +564,8 @@ private fun AlbumPickerSheet(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(filtered, key = { it.id }) { album ->
+                        val count = counts[album.id] ?: 0
+                        val recent = lastAddedAt[album.id] ?: 0L
                         Row(
                             modifier =
                                 Modifier
@@ -545,9 +578,14 @@ private fun AlbumPickerSheet(
                             Column(Modifier.weight(1f)) {
                                 Text(album.name, style = MaterialTheme.typography.titleMedium)
                                 Text(
-                                    "${counts[album.id] ?: 0} 项",
+                                    buildString {
+                                        append("$count 项 · App 内标签")
+                                        if (recent > 0L) append(" · 最近 ${formatDate(recent)}")
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                             Text("加入", color = MaterialTheme.colorScheme.primary)
@@ -559,6 +597,36 @@ private fun AlbumPickerSheet(
         }
     }
 }
+
+@Composable
+private fun AlbumSheetChip(
+    text: String,
+    count: Int,
+    onClick: () -> Unit,
+) {
+    AssistChip(
+        onClick = onClick,
+        label = {
+            Text(
+                "$text · $count",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+    )
+}
+
+private fun sortedAlbumsForOrganize(
+    albums: List<AlbumEntity>,
+    counts: Map<Long, Int>,
+    lastAddedAt: Map<Long, Long>,
+): List<AlbumEntity> =
+    albums.sortedWith(
+        compareByDescending<AlbumEntity> { lastAddedAt[it.id] ?: 0L }
+            .thenByDescending { counts[it.id] ?: 0 }
+            .thenByDescending { it.createdAt }
+            .thenBy { it.name },
+    )
 
 @Composable
 private fun EmptyQueue(
