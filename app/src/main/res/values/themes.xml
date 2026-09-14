@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.PhotoOrganizer" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
