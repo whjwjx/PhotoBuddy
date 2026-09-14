@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -143,6 +144,15 @@ fun FeedScreen(
                         .padding(horizontal = 16.dp, vertical = 24.dp),
             )
         } else {
+            val similarCandidates =
+                remember(state.queueType, state.queueItems, state.current?.id) {
+                    if (state.queueType == QueueType.SIMILAR && state.queueItems.size > 1) {
+                        similarCandidatesForCurrent(state.queueItems, state.current)
+                    } else {
+                        emptyList()
+                    }
+                }
+            val showSimilarComparison = similarCandidates.size > 1
             FeedPage(
                 asset = asset,
                 dragX = dragX,
@@ -177,7 +187,10 @@ fun FeedScreen(
             )
 
             GestureHints(
-                visible = abs(dragX) <= SWIPE_HINT_THRESHOLD && abs(dragY) <= SWIPE_HINT_THRESHOLD,
+                visible =
+                    !showSimilarComparison &&
+                        abs(dragX) <= SWIPE_HINT_THRESHOLD &&
+                        abs(dragY) <= SWIPE_HINT_THRESHOLD,
                 modifier = Modifier.align(Alignment.Center),
             )
             SwipeFeedback(
@@ -195,19 +208,13 @@ fun FeedScreen(
                         .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                if (state.queueType == QueueType.SIMILAR && state.queueItems.size > 1) {
-                    val similarCandidates =
-                        remember(state.queueItems, state.current?.id) {
-                            similarCandidatesForCurrent(state.queueItems, state.current)
-                        }
-                    if (similarCandidates.size > 1) {
-                        SimilarComparisonStrip(
-                            candidates = similarCandidates,
-                            currentIndex = state.currentIndex,
-                            onPick = { vm.setIndex(it) },
-                            onLaterAll = { vm.deferCurrentSimilarGroup() },
-                        )
-                    }
+                if (showSimilarComparison) {
+                    SimilarComparisonStrip(
+                        candidates = similarCandidates,
+                        currentIndex = state.currentIndex,
+                        onPick = { vm.setIndex(it) },
+                        onLaterAll = { vm.deferCurrentSimilarGroup() },
+                    )
                 }
                 AssetCaption(asset = asset)
                 ActionBar(
@@ -485,7 +492,7 @@ private fun SimilarComparisonStrip(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "点缩略图切换候选，选出要保留或待删除的照片。",
+                    "点缩略图对比，下方按钮决定当前候选。",
                     color = Color.White.copy(alpha = 0.72f),
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
@@ -509,11 +516,11 @@ private fun SimilarComparisonStrip(
                 )
             }
             TextButton(onClick = onLaterAll) {
-                Text("全部稍后", color = Color.White)
+                Text("本组稍后", color = Color.White)
             }
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(candidates, key = { it.asset.id }) { candidate ->
+            itemsIndexed(candidates, key = { _, candidate -> candidate.asset.id }) { position, candidate ->
                 val item = candidate.asset
                 val selected = candidate.index == currentIndex
                 Box(
@@ -535,6 +542,19 @@ private fun SimilarComparisonStrip(
                         contentDescription = item.displayName,
                         modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(6.dp)),
                         contentScale = ContentScale.Crop,
+                    )
+                    Text(
+                        if (selected) "当前" else "${position + 1}",
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomStart)
+                                .background(
+                                    Color.Black.copy(alpha = if (selected) 0.72f else 0.56f),
+                                    RoundedCornerShape(topEnd = 6.dp),
+                                )
+                                .padding(horizontal = 5.dp, vertical = 2.dp),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
                     )
                 }
             }
