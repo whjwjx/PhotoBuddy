@@ -25,6 +25,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Home
@@ -57,10 +58,11 @@ import com.example.photoorganizer.R
 
 /** 一级入口（PRD 六·信息架构）。 */
 enum class AppTab(val label: String) {
-    HOME("首页"),
+    HOME("整理"),
     ORGANIZE("整理"),
     TRASH("待删除"),
     ALBUMS("相册"),
+    STATS("统计"),
     SETTINGS("设置"),
 }
 
@@ -94,7 +96,7 @@ fun AppRoot() {
         bottomBar = {
             if (tab != AppTab.ORGANIZE) {
                 NavigationBar {
-                    listOf(AppTab.HOME, AppTab.TRASH, AppTab.ALBUMS, AppTab.SETTINGS).forEach { t ->
+                    listOf(AppTab.HOME, AppTab.ALBUMS, AppTab.STATS, AppTab.SETTINGS).forEach { t ->
                         NavigationBarItem(
                             selected = tab == t,
                             onClick = { tab = t },
@@ -105,6 +107,7 @@ fun AppRoot() {
                                             AppTab.HOME -> Icons.Default.Home
                                             AppTab.TRASH -> Icons.Default.DeleteOutline
                                             AppTab.ALBUMS -> Icons.Default.PhotoAlbum
+                                            AppTab.STATS -> Icons.Default.BarChart
                                             AppTab.SETTINGS -> Icons.Default.Settings
                                             AppTab.ORGANIZE -> Icons.Default.Home
                                         },
@@ -130,6 +133,10 @@ fun AppRoot() {
                 )
                 AppTab.TRASH -> TrashScreen(onExit = { tab = AppTab.HOME })
                 AppTab.ALBUMS -> AlbumsScreen()
+                AppTab.STATS -> StatsScreen(
+                    onPickQueue = { tab = AppTab.ORGANIZE },
+                    onOpenTrash = { tab = AppTab.TRASH },
+                )
                 AppTab.SETTINGS -> SettingsScreen()
             }
         }
