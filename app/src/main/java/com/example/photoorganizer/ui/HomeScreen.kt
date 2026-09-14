@@ -132,7 +132,7 @@ fun HomeScreen(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        "像 Slidebox 一样，一次只判断一张。",
+                        "从一小组开始，几分钟也能往前推进。",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -211,9 +211,9 @@ fun HomeScreen(
                     Text("短队列", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
                         if (homeQueues.size > 4 && !showAllQueues) {
-                            "精选 ${visibleQueues.size} 个入口，展开可测试全部队列"
+                            "优先展示最值得继续的 ${visibleQueues.size} 组"
                         } else {
-                            "所有队列入口都可直接验证"
+                            "按照片场景继续整理"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -441,22 +441,48 @@ private fun QueueCard(
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(icon, contentDescription = null)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    queue.displayName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    queueHelper(queue),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Text(
-                queue.displayName,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                if (queue.items.isNotEmpty()) {
-                    "${queue.items.size} 项 · ${formatBytes(queue.estimatedSavingBytes)}"
-                } else {
-                    "暂无可整理内容"
-                },
+                queueMeta(queue),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
 }
+
+private fun queueHelper(queue: MediaQueue): String =
+    when (queue.type) {
+        QueueType.RANDOM -> "推荐入口"
+        QueueType.UNPROCESSED -> "完整未整理列表"
+        QueueType.SIMILAR -> "对比相近照片"
+        QueueType.SCREENSHOT -> "快速清理截图"
+        QueueType.LARGE_VIDEO -> "优先查看大文件"
+        QueueType.RECENT_30 -> "最近新增照片"
+        QueueType.FAVORITE -> "系统收藏内容"
+        QueueType.MONTH -> "按月份回看"
+    }
+
+private fun queueMeta(queue: MediaQueue): String =
+    if (queue.items.isNotEmpty()) {
+        "${queue.items.size} 项 · 合计 ${formatBytes(queue.estimatedSavingBytes)}"
+    } else {
+        "暂无可整理内容"
+    }
