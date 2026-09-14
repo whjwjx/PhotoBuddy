@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
@@ -51,13 +52,26 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.photoorganizer.data.MediaAsset
 
+private enum class TrashSort(val label: String) {
+    NEWEST("最新"),
+    LARGEST("最大"),
+    OLDEST("最早"),
+}
+
 /** 待删除复核页：真正系统删除前的最后缓冲层。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrashScreen(onExit: () -> Unit) {
     val vm: HomeViewModel = viewModel()
     val state by vm.uiState.collectAsState()
-    val items = state.trashItems
+    var sort by remember { mutableStateOf(TrashSort.NEWEST) }
+    var previewAsset by remember { mutableStateOf<MediaAsset?>(null) }
+    val items =
+        when (sort) {
+            TrashSort.NEWEST -> state.trashItems.sortedByDescending { it.capturedAt }
+            TrashSort.LARGEST -> state.trashItems.sortedByDescending { it.size }
+            TrashSort.OLDEST -> state.trashItems.sortedBy { if (it.capturedAt > 0) it.capturedAt else Long.MAX_VALUE }
+        }
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
 
     LaunchedEffect(items.map { it.id }) {
@@ -146,6 +160,16 @@ fun TrashScreen(onExit: () -> Unit) {
                         )
                     }
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    TrashSort.entries.forEach { option ->
+                        OutlinedButton(
+                            onClick = { sort = option },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(if (sort == option) "${option.label}优先" else option.label)
+                        }
+                    }
+                }
                 Spacer(Modifier.height(10.dp))
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
@@ -157,6 +181,7 @@ fun TrashScreen(onExit: () -> Unit) {
                         TrashTile(
                             asset = asset,
                             selected = asset.id in selectedIds,
+                            onOpen = { previewAsset = asset },
                             onToggle = {
                                 selectedIds =
                                     if (asset.id in selectedIds) {
@@ -171,16 +196,33 @@ fun TrashScreen(onExit: () -> Unit) {
             }
         }
     }
+
+    previewAsset?.let { asset ->
+        TrashPreviewDialog(
+            asset = asset,
+            onRestore = {
+                vm.restoreFromTrash(setOf(asset.id))
+                selectedIds = selectedIds - asset.id
+                previewAsset = null
+            },
+            onDelete = {
+                vm.requestDeleteTrash(setOf(asset.id))
+                previewAsset = null
+            },
+            onDismiss = { previewAsset = null },
+        )
+    }
 }
 
 @Composable
 private fun TrashTile(
     asset: MediaAsset,
     selected: Boolean,
+    onOpen: () -> Unit,
     onToggle: () -> Unit,
 ) {
     Card(
-        modifier = Modifier.clickable(onClick = onToggle),
+        modifier = Modifier.clickable(onClick = onOpen),
         shape = RoundedCornerShape(8.dp),
     ) {
         Box {
@@ -206,6 +248,51 @@ private fun TrashTile(
             )
         }
     }
+}
+
+@Composable
+private fun TrashPreviewDialog(
+    asset: MediaAsset,
+    onRestore: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(asset.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AsyncImage(
+                    model = asset.uri,
+                    contentDescription = asset.displayName,
+                    modifier = Modifier.fillMaxWidth().height(320.dp),
+                    contentScale = ContentScale.Fit,
+                )
+                Text(
+                    buildString {
+                        append(formatBytes(asset.size))
+                        if (asset.capturedAt > 0) append(" · ${formatDate(asset.capturedAt)}")
+                        if (asset.bucketName.isNotEmpty()) append(" · ${asset.bucketName}")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDelete) {
+                Text("确认删除")
+            }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onRestore) { Text("恢复") }
+                TextButton(onClick = onDismiss) { Text("关闭") }
+            }
+        },
+    )
 }
 
 @Composable

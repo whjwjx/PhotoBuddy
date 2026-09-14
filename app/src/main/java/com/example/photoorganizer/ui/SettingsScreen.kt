@@ -1,5 +1,6 @@
 package com.example.photoorganizer.ui
 
+import android.content.pm.ApplicationInfo
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 
@@ -36,8 +38,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @Composable
 fun SettingsScreen() {
     val vm: HomeViewModel = viewModel()
+    val context = LocalContext.current
     val state by vm.uiState.collectAsState()
     val s = state.settings
+    val isDebuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     var daysText by remember { mutableStateOf(s.protectRecentDays.toString()) }
     LaunchedEffect(s.protectRecentDays) { daysText = s.protectRecentDays.toString() }
@@ -140,19 +144,21 @@ fun SettingsScreen() {
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
-            Text("测试工具", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(8.dp))
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp)) {
-                    Text("重置 App 内测试状态")
-                    Text(
-                        "清空整理状态、待删除、相册归类、操作记录和今日计数；不影响系统相册文件。",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = { showResetConfirm = true }) {
-                        Text("一键还原")
+            if (isDebuggable) {
+                Spacer(Modifier.height(16.dp))
+                Text("测试工具", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("重置 App 内测试状态")
+                        Text(
+                            "清空整理状态、待删除、相册归类、操作记录和今日计数；不影响系统相册文件。",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Button(onClick = { showResetConfirm = true }) {
+                            Text("一键还原")
+                        }
                     }
                 }
             }

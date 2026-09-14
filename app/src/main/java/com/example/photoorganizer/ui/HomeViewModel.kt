@@ -68,6 +68,8 @@ data class HomeUiState(
     val settings: OrganizeSettings = OrganizeSettings(),
     val albums: List<AlbumEntity> = emptyList(),
     val albumCounts: Map<Long, Int> = emptyMap(),
+    val albumMediaIds: Map<Long, List<Long>> = emptyMap(),
+    val albumLastAddedAt: Map<Long, Long> = emptyMap(),
     val openAlbumId: Long? = null,
     val openAlbumMediaIds: List<Long> = emptyList(),
     val showBatch: Boolean = false,
@@ -163,6 +165,20 @@ class HomeViewModel(
         viewModelScope.launch {
             albumDao.observeCounts().collect { counts ->
                 _uiState.update { it.copy(albumCounts = counts.associate { c -> c.albumId to c.count }) }
+            }
+        }
+        viewModelScope.launch {
+            albumDao.observeAllItems().collect { items ->
+                _uiState.update {
+                    it.copy(
+                        albumMediaIds = items.groupBy { item -> item.albumId }.mapValues { entry ->
+                            entry.value.map { item -> item.mediaId }
+                        },
+                        albumLastAddedAt = items.groupBy { item -> item.albumId }.mapValues { entry ->
+                            entry.value.maxOfOrNull { item -> item.addedAt } ?: 0L
+                        },
+                    )
+                }
             }
         }
         viewModelScope.launch {
@@ -396,6 +412,31 @@ class HomeViewModel(
         }
     }
 
+    fun renameAlbum(
+        albumId: Long,
+        name: String,
+    ) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            albumDao.renameAlbum(albumId, trimmed)
+        }
+    }
+
+    fun deleteAlbum(albumId: Long) {
+        viewModelScope.launch {
+            albumDao.deleteAlbumItems(albumId)
+            albumDao.deleteAlbum(albumId)
+            _uiState.update { s ->
+                if (s.openAlbumId == albumId) {
+                    s.copy(openAlbumId = null, openAlbumMediaIds = emptyList())
+                } else {
+                    s
+                }
+            }
+        }
+    }
+
     /** 新建相册后立刻把当前卡片归入该相册，保持刷卡流不中断。 */
     fun createAlbumAndAddCurrent(name: String) {
         val asset = _uiState.value.current ?: return
@@ -604,6 +645,17 @@ class HomeViewModel(
                     ),
                 )
             }
+        }
+    }
+
+    fun removeFromAlbum(
+        albumId: Long,
+        mediaIds: Set<Long>,
+    ) {
+        if (mediaIds.isEmpty()) return
+        viewModelScope.launch {
+            mediaIds.forEach { mediaId -> albumDao.removeItem(albumId, mediaId) }
+            if (_uiState.value.openAlbumId == albumId) openAlbum(albumId)
         }
     }
 
