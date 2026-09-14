@@ -309,7 +309,7 @@ private fun QueueProgressRow(
                     )
                     Text(
                         if (queue.items.isNotEmpty()) {
-                            "${queue.items.size} 项 · 预计 ${formatBytes(queue.estimatedSavingBytes)}"
+                            "剩余 ${queue.items.size} 项 · 合计 ${formatBytes(queue.estimatedSavingBytes)}"
                         } else {
                             "这个队列已整理完"
                         },
