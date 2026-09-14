@@ -96,14 +96,15 @@ fun TrashScreen(onExit: () -> Unit) {
                     TextButton(onClick = onExit) { Text("返回") }
                 },
                 actions = {
-                    TextButton(
-                        onClick = {
-                            selectedIds =
-                                if (selectedIds.size == items.size) emptySet() else items.map { it.id }.toSet()
-                        },
-                        enabled = items.isNotEmpty(),
-                    ) {
-                        Text(if (selectedIds.size == items.size) "全不选" else "全选")
+                    if (items.isNotEmpty()) {
+                        TextButton(
+                            onClick = {
+                                selectedIds =
+                                    if (selectedIds.size == items.size) emptySet() else items.map { it.id }.toSet()
+                            },
+                        ) {
+                            Text(if (selectedIds.size == items.size) "全不选" else "全选")
+                        }
                     }
                 },
             )

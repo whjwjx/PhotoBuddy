@@ -177,7 +177,14 @@ fun HomeScreen(
                 onClick = onOpenTrash,
             )
 
-            Text("短队列", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("短队列", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "优先显示现在能继续整理的队列",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             QueueGrid(
                 queues = state.queues,
                 onPick = { queue ->
@@ -281,8 +288,21 @@ private fun QueueGrid(
     queues: List<MediaQueue>,
     onPick: (MediaQueue) -> Unit,
 ) {
-    val priority = listOf(QueueType.SCREENSHOT, QueueType.LARGE_VIDEO, QueueType.RECENT_30, QueueType.FAVORITE)
-    val picked = priority.mapNotNull { type -> queues.firstOrNull { it.type == type } }
+    val priority =
+        listOf(
+            QueueType.RANDOM,
+            QueueType.UNPROCESSED,
+            QueueType.SCREENSHOT,
+            QueueType.LARGE_VIDEO,
+            QueueType.RECENT_30,
+            QueueType.FAVORITE,
+        )
+    val preferred = priority.mapNotNull { type -> queues.firstOrNull { it.type == type } }
+    val monthQueues = queues.filter { it.type == QueueType.MONTH && it.items.isNotEmpty() }
+    val picked =
+        (preferred.filter { it.items.isNotEmpty() } + monthQueues + preferred)
+            .distinctBy { it.type to it.title }
+            .take(4)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         picked.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -291,6 +311,8 @@ private fun QueueGrid(
                         queue = queue,
                         icon =
                             when (queue.type) {
+                                QueueType.RANDOM -> Icons.Default.AutoAwesome
+                                QueueType.UNPROCESSED -> Icons.Default.PhotoLibrary
                                 QueueType.SCREENSHOT -> Icons.Default.ImageSearch
                                 QueueType.LARGE_VIDEO -> Icons.Default.Movie
                                 QueueType.RECENT_30 -> Icons.Default.Today
@@ -317,11 +339,34 @@ private fun QueueCard(
     Card(
         modifier = modifier.clickable(enabled = queue.items.isNotEmpty(), onClick = onClick),
         shape = RoundedCornerShape(8.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (queue.items.isNotEmpty()) {
+                        MaterialTheme.colorScheme.surface
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+            ),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(icon, contentDescription = null)
-            Text(queue.type.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text("${queue.items.size} 项", style = MaterialTheme.typography.bodySmall)
+            Text(
+                queue.displayName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                if (queue.items.isNotEmpty()) {
+                    "${queue.items.size} 项 · ${formatBytes(queue.estimatedSavingBytes)}"
+                } else {
+                    "暂无可整理内容"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
