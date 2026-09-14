@@ -467,6 +467,11 @@ private data class DragDecision(
     val color: Color,
 )
 
+private data class UndoVisual(
+    val color: Color,
+    val detail: String,
+)
+
 @Composable
 private fun SimilarComparisonStrip(
     candidates: List<SimilarCandidate>,
@@ -729,6 +734,7 @@ private fun UndoBanner(
     modifier: Modifier = Modifier,
 ) {
     if (!visible) return
+    val visual = undoVisual(message)
     Row(
         modifier =
             modifier
@@ -737,17 +743,48 @@ private fun UndoBanner(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            message.ifBlank { "已完成" },
-            color = Color.White,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
+        Box(
+            Modifier
+                .width(4.dp)
+                .height(28.dp)
+                .background(visual.color, RoundedCornerShape(8.dp)),
         )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(
+                message.ifBlank { "已完成" },
+                color = Color.White,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                visual.detail,
+                color = Color.White.copy(alpha = 0.58f),
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         TextButton(onClick = onUndo) {
             Text("撤销", color = Color.White)
         }
     }
 }
+
+private fun undoVisual(message: String): UndoVisual =
+    when {
+        message.contains("待删除") ->
+            UndoVisual(Color(0xFFFF453A), "进入复核页前不会删除")
+        message.contains("稍后") ->
+            UndoVisual(Color(0xFF8E8E93), "已移出当前短队列")
+        message.contains("收藏") ->
+            UndoVisual(Color(0xFFFFCC00), "已从未整理中移出")
+        message.contains("相册") ->
+            UndoVisual(Color(0xFF0A84FF), "App 内归类，不移动系统文件")
+        else ->
+            UndoVisual(Color(0xFF34C759), "继续下一张")
+    }
 
 @Composable
 private fun GestureHints(
