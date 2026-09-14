@@ -168,7 +168,9 @@ fun FeedScreen(
                 total = state.queueItems.size,
                 remaining = state.remaining,
                 trashCount = state.trashCount,
+                undoAvailable = state.undo != null,
                 onExit = requestExit,
+                onUndo = { vm.undoLast() },
                 onOpenTrash = onOpenTrash,
                 onQueue = { showQueue = true },
             )
@@ -607,7 +609,9 @@ private fun TopBar(
     total: Int,
     remaining: Int,
     trashCount: Int,
+    undoAvailable: Boolean,
     onExit: () -> Unit,
+    onUndo: () -> Unit,
     onOpenTrash: () -> Unit,
     onQueue: () -> Unit,
 ) {
@@ -632,6 +636,11 @@ private fun TopBar(
                 color = Color.White.copy(alpha = 0.7f),
                 style = MaterialTheme.typography.bodySmall,
             )
+        }
+        if (undoAvailable) {
+            TextButton(onClick = onUndo) {
+                Text("撤销", color = Color.White)
+            }
         }
         TextButton(onClick = onOpenTrash) { Text("待删除 $trashCount", color = Color.White) }
         IconButton(onClick = onQueue) {
