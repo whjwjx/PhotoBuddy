@@ -22,6 +22,10 @@ interface MediaStatusDao {
     @Query("SELECT COUNT(*) FROM media_status WHERE status = :status")
     suspend fun countByStatus(status: String): Int
 
+    /** 后台提醒使用：只需要知道有多少媒体已经被处理过，不拉取完整状态列表。 */
+    @Query("SELECT COUNT(*) FROM media_status")
+    suspend fun countAll(): Int
+
     /** 某媒体的当前整理状态，用于操作日志记录 before_state。 */
     @Query("SELECT * FROM media_status WHERE localAssetId = :id")
     suspend fun get(id: Long): MediaStatusEntity?

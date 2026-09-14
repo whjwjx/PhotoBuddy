@@ -1,6 +1,7 @@
 package com.example.photoorganizer.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -19,6 +20,8 @@ private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 data class OrganizeSettings(
     /** 每日整理目标数量。 */
     val dailyGoal: Int = 20,
+    /** 是否开启每日整理提醒。 */
+    val reminderEnabled: Boolean = false,
 )
 
 /** 每日整理任务进度（PRD 4.1 / 阶段 4）。 */
@@ -38,12 +41,14 @@ class SettingsRepository(
         val DAILY_DATE = stringPreferencesKey("daily_date")
         val DAILY_COUNT = intPreferencesKey("daily_count")
         val PINNED_ALBUM_IDS = stringPreferencesKey("pinned_album_ids")
+        val REMINDER_ENABLED = booleanPreferencesKey("reminder_enabled")
     }
 
     val settings: Flow<OrganizeSettings> =
         context.settingsDataStore.data.map { p ->
             OrganizeSettings(
                 dailyGoal = p[Keys.DAILY_GOAL] ?: 20,
+                reminderEnabled = p[Keys.REMINDER_ENABLED] ?: false,
             )
         }
 
@@ -62,6 +67,10 @@ class SettingsRepository(
 
     suspend fun setDailyGoal(v: Int) {
         context.settingsDataStore.edit { it[Keys.DAILY_GOAL] = v }
+    }
+
+    suspend fun setReminderEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.REMINDER_ENABLED] = enabled }
     }
 
     suspend fun setAlbumPinned(

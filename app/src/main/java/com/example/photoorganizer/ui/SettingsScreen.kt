@@ -1,20 +1,28 @@
 package com.example.photoorganizer.ui
 
+import android.Manifest
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Switch
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -27,9 +35,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 /** 设置页：整理策略与删除安全策略（PRD 六·设置 / 11.4 误删风险）。 */
@@ -41,6 +51,12 @@ fun SettingsScreen() {
     val state by vm.uiState.collectAsState()
     val s = state.settings
     val isDebuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    var notificationGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
+    val notificationLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            notificationGranted = granted
+            vm.setReminderEnabled(granted)
+        }
 
     var goalText by remember { mutableStateOf(s.dailyGoal.toString()) }
     LaunchedEffect(s.dailyGoal) { goalText = s.dailyGoal.toString() }
@@ -72,6 +88,55 @@ fun SettingsScreen() {
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+            }
+
+            SettingsCard(title = "整理提醒") {
+                Text(
+                    "开启后，后台每日扫描时如果还有未整理照片，并且今日目标未完成，会发一条温和提醒。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("每日轻提醒", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (s.reminderEnabled) {
+                                "已开启，点通知会回到整理首页。"
+                            } else {
+                                "关闭后只保留首页今日进度。"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = s.reminderEnabled,
+                        onCheckedChange = { enabled ->
+                            if (enabled && !notificationGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                vm.setReminderEnabled(enabled)
+                            }
+                        },
+                    )
+                }
+                if (s.reminderEnabled && !notificationGranted) {
+                    Text(
+                        "系统通知权限未开启，提醒暂时不会弹出。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    OutlinedButton(
+                        onClick = { notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("允许通知")
+                    }
+                }
             }
 
             SettingsCard(title = "删除确认") {
@@ -128,6 +193,11 @@ fun SettingsScreen() {
         )
     }
 }
+
+private fun hasNotificationPermission(context: android.content.Context): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+        PackageManager.PERMISSION_GRANTED
 
 @Composable
 private fun SettingsCard(

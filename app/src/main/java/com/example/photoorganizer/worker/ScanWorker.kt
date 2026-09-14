@@ -1,6 +1,16 @@
 package com.example.photoorganizer.worker
 
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -13,6 +23,8 @@ import com.example.photoorganizer.data.MediaLibraryRepository
 import com.example.photoorganizer.data.MediaStoreRepository
 import com.example.photoorganizer.data.SettingsRepository
 import com.example.photoorganizer.data.local.AppDatabase
+import com.example.photoorganizer.MainActivity
+import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
 
 /**
@@ -26,6 +38,7 @@ class ScanWorker(
     override suspend fun doWork(): Result =
         try {
             repository().sync(full = false)
+            maybeNotifyDailyReminder()
             Result.success()
         } catch (e: Exception) {
             Result.retry()
@@ -40,9 +53,66 @@ class ScanWorker(
         )
     }
 
+    private suspend fun maybeNotifyDailyReminder() {
+        val settingsRepo = SettingsRepository(applicationContext)
+        val settings = settingsRepo.settings.first()
+        if (!settings.reminderEnabled || settings.dailyGoal <= 0) return
+        val daily = settingsRepo.daily.first()
+        if (daily.count >= settings.dailyGoal) return
+
+        val db = AppDatabase.getDatabase(applicationContext)
+        val remaining = (db.mediaIndexDao().count() - db.mediaStatusDao().countAll()).coerceAtLeast(0)
+        if (remaining <= 0 || !canPostNotifications()) return
+
+        ensureChannel()
+        val intent =
+            Intent(applicationContext, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+        val pendingIntent =
+            PendingIntent.getActivity(
+                applicationContext,
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        val notification =
+            NotificationCompat.Builder(applicationContext, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_menu_gallery)
+                .setContentTitle("今天整理 ${settings.dailyGoal} 张照片")
+                .setContentText("还有 $remaining 张未整理，打开后从短队列继续。")
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .build()
+        NotificationManagerCompat.from(applicationContext).notify(DAILY_REMINDER_ID, notification)
+    }
+
+    private fun canPostNotifications(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun ensureChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val channel =
+            NotificationChannel(
+                CHANNEL_ID,
+                "整理提醒",
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = "提醒你用短队列轻量整理新增照片"
+            }
+        applicationContext
+            .getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(channel)
+    }
+
     companion object {
         private const val PERIODIC_NAME = "incremental_scan"
         private const val ONCE_NAME = "scan_once"
+        private const val CHANNEL_ID = "daily_organize_reminder"
+        private const val DAILY_REMINDER_ID = 1001
 
         /** 每日一次增量扫描（电量不低时执行）。 */
         fun enqueuePeriodic(context: Context) {
