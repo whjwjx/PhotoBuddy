@@ -31,4 +31,8 @@ interface UserActionLogDao {
         id: Long,
         action: String,
     )
+
+    /** 测试用：清空操作记录，避免反复试用后首页记录干扰判断。 */
+    @Query("DELETE FROM user_action_log")
+    suspend fun clearAll()
 }

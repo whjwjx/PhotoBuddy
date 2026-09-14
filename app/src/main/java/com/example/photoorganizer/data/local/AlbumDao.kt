@@ -34,4 +34,8 @@ interface AlbumDao {
         albumId: Long,
         mediaId: Long,
     )
+
+    /** 测试用：清空相册归类关系，但保留相册名称，方便继续测试快捷相册入口。 */
+    @Query("DELETE FROM album_items")
+    suspend fun clearItems()
 }

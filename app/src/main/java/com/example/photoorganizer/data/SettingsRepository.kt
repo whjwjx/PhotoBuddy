@@ -100,5 +100,13 @@ class SettingsRepository(
         }
     }
 
+    /** 测试用：重置今日整理计数，让有限素材可以反复跑完整流程。 */
+    suspend fun resetDaily() {
+        context.settingsDataStore.edit { p ->
+            p[Keys.DAILY_DATE] = today()
+            p[Keys.DAILY_COUNT] = 0
+        }
+    }
+
     private fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 }

@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -41,12 +45,14 @@ fun SettingsScreen() {
     LaunchedEffect(s.batchChunkSize) { chunkText = s.batchChunkSize.toString() }
     var goalText by remember { mutableStateOf(s.dailyGoal.toString()) }
     LaunchedEffect(s.dailyGoal) { goalText = s.dailyGoal.toString() }
+    var showResetConfirm by remember { mutableStateOf(false) }
 
     Scaffold(topBar = { TopAppBar(title = { Text("设置") }) }) { padding ->
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
                     .padding(padding)
                     .padding(16.dp),
         ) {
@@ -133,6 +139,49 @@ fun SettingsScreen() {
                     }
                 }
             }
+
+            Spacer(Modifier.height(16.dp))
+            Text("测试工具", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("一键还原测试状态")
+                    Text(
+                        "清空 App 内整理状态、待删除、相册归类、操作记录和今日计数；不会恢复已经被系统删除的真实照片。",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = { showResetConfirm = true }) {
+                        Text("一键还原")
+                    }
+                }
+            }
         }
+    }
+
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            title = { Text("还原测试状态？") },
+            text = {
+                Text(
+                    "这会让照片重新回到未整理队列，并清空待删除和测试记录。" +
+                        "它只影响本 App 数据，不会恢复已经通过系统确认删除的文件。",
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    vm.resetForTesting()
+                    showResetConfirm = false
+                }) {
+                    Text("确认还原")
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showResetConfirm = false }) {
+                    Text("取消")
+                }
+            },
+        )
     }
 }

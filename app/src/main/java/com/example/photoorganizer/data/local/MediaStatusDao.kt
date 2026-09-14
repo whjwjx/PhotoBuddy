@@ -25,4 +25,12 @@ interface MediaStatusDao {
     /** 某媒体的当前整理状态，用于操作日志记录 before_state。 */
     @Query("SELECT * FROM media_status WHERE localAssetId = :id")
     suspend fun get(id: Long): MediaStatusEntity?
+
+    /** 撤销到未整理状态，或从待删除恢复到整理队列。 */
+    @Query("DELETE FROM media_status WHERE localAssetId IN (:ids)")
+    suspend fun deleteByIds(ids: List<Long>)
+
+    /** 测试用：清空 App 内整理状态，让媒体重新回到未整理队列。 */
+    @Query("DELETE FROM media_status")
+    suspend fun clearAll()
 }

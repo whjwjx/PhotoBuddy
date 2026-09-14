@@ -42,24 +42,25 @@ object QueueEngine {
         processedIds: Set<Long> = emptySet(),
     ): List<MediaQueue> {
         val now = System.currentTimeMillis()
+        val unprocessed = assets.filter { it.id !in processedIds }
         val out = mutableListOf<MediaQueue>()
-        out += queue(QueueType.RANDOM, "", assets)
-        out += queue(QueueType.SCREENSHOT, "", assets.filter { it.isScreenshot() })
+        out += queue(QueueType.RANDOM, "", unprocessed)
+        out += queue(QueueType.SCREENSHOT, "", unprocessed.filter { it.isScreenshot() })
         out += queue(
             QueueType.LARGE_VIDEO,
             "",
-            assets.filter { it.mediaType == MediaType.VIDEO && it.size >= LARGE_VIDEO_BYTES },
+            unprocessed.filter { it.mediaType == MediaType.VIDEO && it.size >= LARGE_VIDEO_BYTES },
         )
         out += queue(
             QueueType.RECENT_30,
             "",
-            assets.filter { it.capturedAt > 0 && it.capturedAt >= now - 30 * DAY_MS },
+            unprocessed.filter { it.capturedAt > 0 && it.capturedAt >= now - 30 * DAY_MS },
         )
-        out += queue(QueueType.UNPROCESSED, "", assets.filter { it.id !in processedIds })
-        out += queue(QueueType.FAVORITE, "", assets.filter { it.isFavorite })
+        out += queue(QueueType.UNPROCESSED, "", unprocessed)
+        out += queue(QueueType.FAVORITE, "", unprocessed.filter { it.isFavorite })
 
         // 按月份拆分为多个队列，便于逐步整理历史相册（PRD 4.3 某个月份）
-        assets
+        unprocessed
             .groupBy { monthKey(it.capturedAt) }
             .toSortedMap(compareByDescending<String> { it })
             .forEach { (key, items) -> out += queue(QueueType.MONTH, key, items) }

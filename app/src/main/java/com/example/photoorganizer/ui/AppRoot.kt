@@ -11,6 +11,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.PhotoAlbum
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -32,6 +38,7 @@ import com.example.photoorganizer.R
 enum class AppTab(val label: String) {
     HOME("首页"),
     ORGANIZE("整理"),
+    TRASH("待删除"),
     ALBUMS("相册"),
     SETTINGS("设置"),
 }
@@ -76,11 +83,23 @@ fun AppRoot() {
         bottomBar = {
             if (tab != AppTab.ORGANIZE) {
                 NavigationBar {
-                    AppTab.values().forEach { t ->
+                    listOf(AppTab.HOME, AppTab.TRASH, AppTab.ALBUMS, AppTab.SETTINGS).forEach { t ->
                         NavigationBarItem(
                             selected = tab == t,
                             onClick = { tab = t },
-                            icon = {},
+                            icon = {
+                                Icon(
+                                    imageVector =
+                                        when (t) {
+                                            AppTab.HOME -> Icons.Default.Home
+                                            AppTab.TRASH -> Icons.Default.DeleteOutline
+                                            AppTab.ALBUMS -> Icons.Default.PhotoAlbum
+                                            AppTab.SETTINGS -> Icons.Default.Settings
+                                            AppTab.ORGANIZE -> Icons.Default.Home
+                                        },
+                                    contentDescription = t.label,
+                                )
+                            },
                             label = { Text(t.label) },
                         )
                     }
@@ -90,8 +109,15 @@ fun AppRoot() {
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when (tab) {
-                AppTab.HOME -> HomeScreen(onStartOrganize = { tab = AppTab.ORGANIZE })
-                AppTab.ORGANIZE -> FeedScreen(onExit = { tab = AppTab.HOME })
+                AppTab.HOME -> HomeScreen(
+                    onStartOrganize = { tab = AppTab.ORGANIZE },
+                    onOpenTrash = { tab = AppTab.TRASH },
+                )
+                AppTab.ORGANIZE -> FeedScreen(
+                    onExit = { tab = AppTab.HOME },
+                    onOpenTrash = { tab = AppTab.TRASH },
+                )
+                AppTab.TRASH -> TrashScreen(onExit = { tab = AppTab.HOME })
                 AppTab.ALBUMS -> AlbumsScreen()
                 AppTab.SETTINGS -> SettingsScreen()
             }

@@ -1,14 +1,10 @@
 package com.example.photoorganizer.ui
 
-import android.app.Activity
 import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.IntentSenderRequest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,25 +18,32 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.pager.VerticalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddToPhotos
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -51,16 +54,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -68,210 +72,110 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
-import kotlinx.coroutines.delay
 import com.example.photoorganizer.data.MediaAsset
 import com.example.photoorganizer.data.MediaType
+import com.example.photoorganizer.data.local.AlbumEntity
 import com.example.photoorganizer.data.local.MediaStatus
+import kotlinx.coroutines.delay
+import kotlin.math.abs
+import kotlin.math.min
 
-/**
- * 沉浸式的「刷照片」流（借鉴 Slidebox 刷卡整理 + 抖音式全屏沉浸体验）。
- *
- * 交互约定：
- * - 上下滑动：切换照片/视频（抖音式）
- * - 右滑：保留；左滑：稍后处理（Slidebox 式手势决策，但避开与竖向切换冲突）
- * - 删除：必须点按钮走二次确认 + 系统删除确认（PRD 4.5 安全优先，绝不允许误触删除）
- */
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+/** Slidebox 式单卡整理流：当前照片做完一个决策后自动推进到下一张。 */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FeedScreen(onExit: () -> Unit) {
+fun FeedScreen(
+    onExit: () -> Unit,
+    onOpenTrash: () -> Unit,
+) {
     val vm: HomeViewModel = viewModel()
     val state by vm.uiState.collectAsState()
-    val context = LocalContext.current
-
-    // 沉浸式：进入时隐藏系统栏，退出时恢复
-    DisposableEffect(Unit) {
-        val window = (context as? Activity)?.window
-        val controller = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
-        controller?.hide(WindowInsetsCompat.Type.systemBars())
-        onDispose { controller?.show(WindowInsetsCompat.Type.systemBars()) }
-    }
-
-    var showDeleteConfirm by remember { mutableStateOf(false) }
     var showAddAlbum by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
-
-    val deleteLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-            if (result.resultCode == Activity.RESULT_OK) vm.onDeleteApproved() else vm.clearPendingDelete()
-        }
-    LaunchedEffect(state.pendingDelete) {
-        state.pendingDelete?.let { sender ->
-            deleteLauncher.launch(IntentSenderRequest.Builder(sender).build())
-        }
-    }
-
-    val batchLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-            if (result.resultCode == Activity.RESULT_OK) vm.onBatchApproved() else vm.clearPendingBatch()
-        }
-    LaunchedEffect(state.pendingBatchDelete) {
-        state.pendingBatchDelete?.let { sender ->
-            batchLauncher.launch(IntentSenderRequest.Builder(sender).build())
-        }
-    }
-
-    val items = state.queueItems
-    val pagerState =
-        rememberPagerState(initialPage = state.currentIndex.coerceAtMost(items.size)) { items.size }
-
-    LaunchedEffect(pagerState.currentPage) { vm.setIndex(pagerState.currentPage) }
-    LaunchedEffect(state.currentIndex) {
-        // 越界保护：队列刷完时 currentIndex == items.size，此时不能滚动
-        if (state.currentIndex < items.size && pagerState.currentPage != state.currentIndex) {
-            pagerState.animateScrollToPage(state.currentIndex)
-        }
-    }
+    var dragX by remember { mutableStateOf(0f) }
+    var dragY by remember { mutableStateOf(0f) }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        if (items.isEmpty()) {
-            Text(
-                "这个队列没有内容，换一个队列或回首页重新扫描。",
-                color = Color.White,
-                modifier = Modifier.align(Alignment.Center).padding(24.dp),
+        val asset = state.current
+        if (asset == null) {
+            EmptyQueue(
+                title = if (state.queueItems.isEmpty()) "这个队列没有内容" else "这个队列刷完啦",
+                onExit = onExit,
+                onQueue = { showQueue = true },
             )
         } else {
-            VerticalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-                val asset = items.getOrNull(page)
-                if (asset != null) {
-                    FeedPage(
-                        asset = asset,
-                        active = page == pagerState.currentPage,
-                        onKeep = { vm.act(MediaStatus.KEEP) },
-                        onLater = { vm.act(MediaStatus.LATER) },
-                    )
-                }
-            }
-        }
+            FeedPage(
+                asset = asset,
+                onKeep = { vm.act(MediaStatus.KEEP) },
+                onLater = { vm.act(MediaStatus.LATER) },
+                onTrash = { vm.act(MediaStatus.TRASH) },
+                onFavorite = { vm.act(MediaStatus.FAVORITE) },
+                onDragFeedback = { x, y ->
+                    dragX = x
+                    dragY = y
+                },
+            )
 
-        // 队列刷完：给出完成态与下一步入口，而不是一片空白
-        if (items.isNotEmpty() && state.current == null) {
+            TopBar(
+                title = state.queueType.label + if (state.queueTitle.isNotEmpty()) " · ${state.queueTitle}" else "",
+                remaining = state.remaining,
+                trashCount = state.trashCount,
+                canUndo = state.undo != null,
+                onExit = onExit,
+                onUndo = { vm.undoLast() },
+                onOpenTrash = onOpenTrash,
+                onQueue = { showQueue = true },
+            )
+
+            GestureHints(Modifier.align(Alignment.Center))
+            SwipeFeedback(
+                dragX = dragX,
+                dragY = dragY,
+                modifier = Modifier.align(Alignment.Center),
+            )
+
             Column(
-                Modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text(
-                    "这个队列刷完啦！",
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleLarge,
+                AssetCaption(asset = asset)
+                ActionBar(
+                    onTrash = { vm.act(MediaStatus.TRASH) },
+                    onKeep = { vm.act(MediaStatus.KEEP) },
+                    onLater = { vm.act(MediaStatus.LATER) },
+                    onFavorite = { vm.act(MediaStatus.FAVORITE) },
                 )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "累计释放 ${formatBytes(state.freedBytes)}",
-                    color = Color.White.copy(alpha = 0.8f),
+                AlbumQuickBar(
+                    state = state,
+                    onPick = { vm.addCurrentToAlbum(it) },
+                    onMore = { showAddAlbum = true },
                 )
-                Spacer(Modifier.height(16.dp))
-                Button(onClick = { state.queues.firstOrNull()?.let { vm.selectQueue(it) } }) {
-                    Text("换一个队列")
-                }
-                TextButton(onClick = onExit) { Text("回首页", color = Color.White) }
-            }
-        }
-
-        // 顶部浮层：返回、队列/筛选、批量
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(onClick = onExit) { Text("‹ 首页", color = Color.White) }
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = { showQueue = true }) { Text("队列/筛选", color = Color.White) }
-            TextButton(onClick = { vm.enterBatch() }) { Text("批量", color = Color.White) }
-        }
-
-        val asset = state.current
-        if (asset != null) {
-            // 右侧竖排操作栏（抖音式）
-            Column(
-                Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                FeedAction(Icons.Default.Favorite, "保留") { vm.act(MediaStatus.KEEP) }
-                FeedAction(Icons.Default.Delete, "删除") { showDeleteConfirm = true }
-                FeedAction(Icons.Default.Schedule, "稍后") { vm.act(MediaStatus.LATER) }
-                FeedAction(Icons.Default.Lock, "永久保留") { vm.act(MediaStatus.PERMANENT) }
-                FeedAction(Icons.Default.AddToPhotos, "加入相册") { showAddAlbum = true }
             }
 
-            // 底部信息条（文件名 / 时间 / 大小 / 来源队列 / 进度）
-            Column(
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(16.dp)
-                    .navigationBarsPadding(),
-            ) {
-                Text(
-                    asset.displayName,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    buildString {
-                        append(formatBytes(asset.size))
-                        if (asset.capturedAt > 0) append(" · ${formatDate(asset.capturedAt)}")
-                    },
-                    color = Color.White.copy(alpha = 0.8f),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Text(
-                    "来源：${state.queueType.label}" +
-                        (if (state.queueTitle.isNotEmpty()) " · ${state.queueTitle}" else "") +
-                        " · ${state.currentIndex + 1}/${items.size}" +
-                        " · 已释放 ${formatBytes(state.freedBytes)}",
-                    color = Color.White.copy(alpha = 0.7f),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Text(
-                    "右滑保留 · 左滑稍后",
-                    color = Color.White.copy(alpha = 0.5f),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+            UndoBanner(
+                visible = state.undo != null,
+                onUndo = { vm.undoLast() },
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 238.dp),
+            )
         }
-    }
-
-    if (showDeleteConfirm && state.current != null) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("确认删除") },
-            text = {
-                Text(
-                    "《${state.current!!.displayName}》将移入系统「最近删除」，" +
-                        "可在系统相册的回收站中恢复（通常保留 30 天后自动清除）。" +
-                        "若系统不支持回收站，才会永久删除。",
-                )
-            },
-            confirmButton = {
-                Button(onClick = {
-                    showDeleteConfirm = false
-                    vm.requestDelete()
-                }) { Text("确认删除") }
-            },
-            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") } },
-        )
     }
 
     if (showAddAlbum && state.current != null) {
-        AddToAlbumDialog(
+        AlbumPickerSheet(
             albums = state.albums,
             counts = state.albumCounts,
-            onCreate = { vm.createAlbum(it) },
+            onCreateAndPick = {
+                vm.createAlbumAndAddCurrent(it)
+                showAddAlbum = false
+            },
             onPick = { albumId ->
                 vm.addCurrentToAlbum(albumId)
                 showAddAlbum = false
@@ -286,50 +190,60 @@ fun FeedScreen(onExit: () -> Unit) {
             albums = emptyList(),
             onFilterType = { vm.setFilter(it, state.filterBucket) },
             onFilterBucket = { vm.setFilter(state.filterType, it) },
-            onSelectQueue = { vm.selectQueue(it) },
+            onSelectQueue = {
+                vm.selectQueue(it)
+                showQueue = false
+            },
             onDismiss = { showQueue = false },
-        )
-    }
-
-    if (state.showBatch) {
-        BatchConfirmDialog(
-            state = state,
-            onToggle = { vm.toggleSelect(it) },
-            onSelectAll = { vm.selectAllBatch(it) },
-            onConfirm = { vm.confirmBatch() },
-            onDismiss = { vm.exitBatch() },
         )
     }
 }
 
-/** 单页内容：图片或视频；视频仅在成为当前页时自动播放。 */
 @Composable
 private fun FeedPage(
     asset: MediaAsset,
-    active: Boolean,
     onKeep: () -> Unit,
     onLater: () -> Unit,
+    onTrash: () -> Unit,
+    onFavorite: () -> Unit,
+    onDragFeedback: (Float, Float) -> Unit,
 ) {
     Box(
         Modifier
             .fillMaxSize()
             .background(Color.Black)
             .pointerInput(asset.id) {
-                var dragTotal = 0f
-                detectHorizontalDragGestures(
-                    onDragStart = { dragTotal = 0f },
-                    onHorizontalDrag = { _, amount -> dragTotal += amount },
+                var totalX = 0f
+                var totalY = 0f
+                detectDragGestures(
+                    onDragStart = {
+                        totalX = 0f
+                        totalY = 0f
+                    },
+                    onDrag = { change, amount ->
+                        change.consume()
+                        totalX += amount.x
+                        totalY += amount.y
+                        onDragFeedback(totalX, totalY)
+                    },
                     onDragEnd = {
+                        val horizontal = abs(totalX) > abs(totalY)
                         when {
-                            dragTotal > 120f -> onKeep()
-                            dragTotal < -120f -> onLater()
+                            horizontal && totalX > 120f -> onKeep()
+                            horizontal && totalX < -120f -> onLater()
+                            !horizontal && totalY < -120f -> onTrash()
+                            !horizontal && totalY > 120f -> onFavorite()
                         }
+                        onDragFeedback(0f, 0f)
+                    },
+                    onDragCancel = {
+                        onDragFeedback(0f, 0f)
                     },
                 )
             },
     ) {
         if (asset.mediaType == MediaType.VIDEO) {
-            VideoPage(uri = asset.uri, active = active, modifier = Modifier.fillMaxSize())
+            VideoPage(uri = asset.uri, active = true, modifier = Modifier.fillMaxSize())
         } else {
             AsyncImage(
                 model = asset.uri,
@@ -341,12 +255,366 @@ private fun FeedPage(
     }
 }
 
-/**
- * 视频页：Media3/ExoPlayer 自动播放 + 播放控制（PRD 5.5 / 8.2）。
- * - 成为当前页自动播放，离开自动暂停
- * - 点击画面暂停/继续
- * - 底部进度条可拖动 seek，显示当前时间/总时长
- */
+@Composable
+private fun SwipeFeedback(
+    dragX: Float,
+    dragY: Float,
+    modifier: Modifier = Modifier,
+) {
+    val horizontal = abs(dragX) > abs(dragY)
+    val active = abs(dragX) > 36f || abs(dragY) > 36f
+    if (!active) return
+    val label =
+        when {
+            horizontal && dragX > 0 -> "保留"
+            horizontal -> "稍后"
+            dragY < 0 -> "加入待删除"
+            else -> "收藏"
+        }
+    val color =
+        when (label) {
+            "加入待删除" -> Color(0xFFE53935)
+            "收藏" -> Color(0xFFFFC107)
+            "保留" -> Color(0xFF43A047)
+            else -> Color(0xFF42A5F5)
+        }
+    val alpha = min(0.86f, (maxOf(abs(dragX), abs(dragY)) / 180f).coerceAtLeast(0.28f))
+    Box(
+        modifier =
+            modifier
+                .background(color.copy(alpha = alpha), RoundedCornerShape(8.dp))
+                .padding(horizontal = 22.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            color = Color.White,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun TopBar(
+    title: String,
+    remaining: Int,
+    trashCount: Int,
+    canUndo: Boolean,
+    onExit: () -> Unit,
+    onUndo: () -> Unit,
+    onOpenTrash: () -> Unit,
+    onQueue: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = onExit) { Text("关闭", color = Color.White) }
+        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                title,
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text("剩余 $remaining", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall)
+        }
+        TextButton(onClick = onUndo, enabled = canUndo) { Text("撤销", color = Color.White) }
+        TextButton(onClick = onOpenTrash) { Text("待删 $trashCount", color = Color.White) }
+        IconButton(onClick = onQueue) {
+            Icon(Icons.Default.MoreHoriz, contentDescription = "队列", tint = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun UndoBanner(
+    visible: Boolean,
+    onUndo: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (!visible) return
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .background(Color.Black.copy(alpha = 0.74f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "已处理当前照片",
+            color = Color.White,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onUndo) {
+            Text("撤销", color = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun GestureHints(modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(160.dp)) {
+        Text("下拉收藏", color = Color.White.copy(alpha = 0.45f), style = MaterialTheme.typography.labelMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(120.dp)) {
+            Text("稍后", color = Color.White.copy(alpha = 0.4f), style = MaterialTheme.typography.labelMedium)
+            Text("保留", color = Color.White.copy(alpha = 0.4f), style = MaterialTheme.typography.labelMedium)
+        }
+        Text("上滑待删除", color = Color.White.copy(alpha = 0.45f), style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+@Composable
+private fun AssetCaption(asset: MediaAsset) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(Color.Black.copy(alpha = 0.42f), RoundedCornerShape(8.dp))
+            .padding(10.dp),
+    ) {
+        Text(asset.displayName, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            buildString {
+                append(formatBytes(asset.size))
+                if (asset.capturedAt > 0) append(" · ${formatDate(asset.capturedAt)}")
+                if (asset.bucketName.isNotEmpty()) append(" · ${asset.bucketName}")
+            },
+            color = Color.White.copy(alpha = 0.72f),
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun ActionBar(
+    onTrash: () -> Unit,
+    onKeep: () -> Unit,
+    onLater: () -> Unit,
+    onFavorite: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Color.Black.copy(alpha = 0.48f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceAround,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FeedAction(Icons.Default.DeleteOutline, "待删除", onTrash)
+        FeedAction(Icons.Default.Schedule, "稍后", onLater)
+        FeedAction(Icons.Default.Check, "保留", onKeep)
+        FeedAction(Icons.Default.Star, "收藏", onFavorite)
+    }
+}
+
+@Composable
+private fun AlbumQuickBar(
+    state: HomeUiState,
+    onPick: (Long) -> Unit,
+    onMore: () -> Unit,
+) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .background(Color.Black.copy(alpha = 0.54f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+    ) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            items(state.albums.take(6)) { album ->
+                AlbumChip(
+                    text = album.name,
+                    onClick = { onPick(album.id) },
+                )
+            }
+            item {
+                AlbumChip(
+                    text = if (state.albums.isEmpty()) "新建相册" else "更多相册",
+                    onClick = onMore,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumChip(
+    text: String,
+    onClick: () -> Unit,
+) {
+    AssistChip(
+        onClick = onClick,
+        label = {
+            Text(
+                text,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        colors =
+            AssistChipDefaults.assistChipColors(
+                containerColor = Color.White.copy(alpha = 0.16f),
+                labelColor = Color.White,
+            ),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.34f)),
+    )
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun AlbumPickerSheet(
+    albums: List<AlbumEntity>,
+    counts: Map<Long, Int>,
+    onCreateAndPick: (String) -> Unit,
+    onPick: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val filtered =
+        albums.filter {
+            query.isBlank() || it.name.contains(query.trim(), ignoreCase = true)
+        }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 18.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("加入相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                label = { Text("搜索或新建相册") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = { onCreateAndPick(query) },
+                enabled = query.trim().isNotEmpty(),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("新建并加入「${query.trim().ifEmpty { "相册" }}」")
+            }
+            Text("已有相册", style = MaterialTheme.typography.labelLarge)
+            if (filtered.isEmpty()) {
+                Text(
+                    if (albums.isEmpty()) {
+                        "还没有相册，可以先新建一个。"
+                    } else {
+                        "没有匹配的相册。"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.height(320.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    items(filtered, key = { it.id }) { album ->
+                        Row(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onPick(album.id) }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(album.name, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "${counts[album.id] ?: 0} 项",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Text("加入", color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun EmptyQueue(
+    title: String,
+    onExit: () -> Unit,
+    onQueue: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            title,
+            color = Color.White,
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "换一个短队列，或者回首页看看待删除。",
+            color = Color.White.copy(alpha = 0.72f),
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(20.dp))
+        Button(onClick = onQueue) { Text("选择队列") }
+        TextButton(onClick = onExit) { Text("回首页", color = Color.White) }
+    }
+}
+
+@Composable
+private fun FeedAction(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier
+                .size(40.dp)
+                .background(Color.White.copy(alpha = 0.14f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = label, tint = Color.White)
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(label, color = Color.White, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
 @Composable
 private fun VideoPage(
     uri: Uri,
@@ -409,7 +677,6 @@ private fun VideoPage(
             modifier = Modifier.fillMaxSize(),
         )
 
-        // 点击画面切换播放/暂停
         Box(
             Modifier
                 .fillMaxSize()
@@ -419,16 +686,13 @@ private fun VideoPage(
                 ) { toggle() },
         )
 
-        // 底部播放控制条：抬高 104dp 避开底部信息文字，同时不贴屏幕边缘（避免触发系统手势）
         Row(
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(start = 4.dp, end = 8.dp, bottom = 104.dp)
-                .background(
-                    Color.Black.copy(alpha = 0.45f),
-                    shape = MaterialTheme.shapes.small,
-                ).padding(horizontal = 4.dp),
+                .padding(start = 8.dp, end = 8.dp, bottom = 168.dp)
+                .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { toggle() }, modifier = Modifier.size(40.dp)) {
@@ -448,7 +712,6 @@ private fun VideoPage(
                     player.seekTo(position)
                     scrubbing = false
                 },
-                // 限制高度，默认 48dp 会把控制条撑得过高
                 modifier = Modifier.weight(1f).height(20.dp),
             )
             Text(
@@ -458,30 +721,5 @@ private fun VideoPage(
                 maxLines = 1,
             )
         }
-    }
-}
-
-@Composable
-private fun FeedAction(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-) {
-    // 整块（图标+文字）都可点击，避免用户点到文字没反应
-    Column(
-        modifier =
-            Modifier
-                .clickable(onClick = onClick)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = Color.White,
-            modifier = Modifier.size(28.dp),
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(label, color = Color.White, style = MaterialTheme.typography.bodySmall)
     }
 }
