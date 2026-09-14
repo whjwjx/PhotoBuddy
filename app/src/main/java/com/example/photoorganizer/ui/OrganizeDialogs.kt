@@ -101,9 +101,9 @@ internal fun QueueFilterSheet(
                 .padding(horizontal = 18.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("选择队列", style = MaterialTheme.typography.titleLarge)
+            Text("短队列", style = MaterialTheme.typography.titleLarge)
             Text(
-                "切换短任务，当前整理进度会保留。",
+                "换一组继续，已处理进度会保留。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -229,7 +229,7 @@ private fun queueRowMeta(
         } else {
             append("${queue.items.size} 项")
             if (queue.estimatedSavingBytes > 0L) {
-                append(" · 预计可释放 ${formatBytes(queue.estimatedSavingBytes)}")
+                append(" · 合计 ${formatBytes(queue.estimatedSavingBytes)}")
             }
         }
         if (selected) {
