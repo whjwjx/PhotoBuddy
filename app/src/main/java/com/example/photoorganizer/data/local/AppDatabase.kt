@@ -5,9 +5,19 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [MediaStatusEntity::class], version = 1, exportSchema = false)
+@Database(
+    entities = [
+        MediaStatusEntity::class,
+        AlbumEntity::class,
+        AlbumItemEntity::class,
+    ],
+    version = 2,
+    exportSchema = false,
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun mediaStatusDao(): MediaStatusDao
+
+    abstract fun albumDao(): AlbumDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -19,7 +29,10 @@ abstract class AppDatabase : RoomDatabase() {
                         context.applicationContext,
                         AppDatabase::class.java,
                         "photo_organizer.db",
-                    ).build()
+                    )
+                    // MVP 阶段本地整理状态可重建，升级时直接重建，避免缺少迁移导致崩溃。
+                    .fallbackToDestructiveMigration()
+                    .build()
                     .also { INSTANCE = it }
             }
     }
