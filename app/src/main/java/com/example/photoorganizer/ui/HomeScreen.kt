@@ -292,6 +292,7 @@ private fun QueueGrid(
         listOf(
             QueueType.RANDOM,
             QueueType.UNPROCESSED,
+            QueueType.SIMILAR,
             QueueType.SCREENSHOT,
             QueueType.LARGE_VIDEO,
             QueueType.RECENT_30,
@@ -313,6 +314,7 @@ private fun QueueGrid(
                             when (queue.type) {
                                 QueueType.RANDOM -> Icons.Default.AutoAwesome
                                 QueueType.UNPROCESSED -> Icons.Default.PhotoLibrary
+                                QueueType.SIMILAR -> Icons.Default.ImageSearch
                                 QueueType.SCREENSHOT -> Icons.Default.ImageSearch
                                 QueueType.LARGE_VIDEO -> Icons.Default.Movie
                                 QueueType.RECENT_30 -> Icons.Default.Today

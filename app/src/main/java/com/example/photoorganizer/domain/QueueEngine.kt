@@ -10,6 +10,7 @@ enum class QueueType(val label: String) {
     RANDOM("随机整理"),
     SCREENSHOT("截图"),
     LARGE_VIDEO("大视频"),
+    SIMILAR("相似照片"),
     RECENT_30("最近 30 天"),
     MONTH("按月份"),
     UNPROCESSED("未整理"),
@@ -51,6 +52,7 @@ object QueueEngine {
             "",
             unprocessed.filter { it.mediaType == MediaType.VIDEO && it.size >= LARGE_VIDEO_BYTES },
         )
+        out += queue(QueueType.SIMILAR, "", similarCandidates(unprocessed))
         out += queue(
             QueueType.RECENT_30,
             "",
@@ -73,9 +75,49 @@ object QueueEngine {
         items: List<MediaAsset>,
     ) = MediaQueue(type, title, items, items.sumOf { it.size })
 
+    private fun similarCandidates(assets: List<MediaAsset>): List<MediaAsset> =
+        assets
+            .asSequence()
+            .filter { it.mediaType == MediaType.IMAGE && it.width > 0 && it.height > 0 }
+            .groupBy { SimilarBucket.from(it) }
+            .values
+            .filter { it.size >= 2 }
+            .flatten()
+            .sortedWith(compareBy<MediaAsset> { it.bucketName }.thenBy { captureOrAddedMs(it) }.thenBy { it.id })
+
     private fun monthKey(ms: Long): String {
         if (ms <= 0) return "未知时间"
         val c = Calendar.getInstance().apply { timeInMillis = ms }
         return String.format(Locale.getDefault(), "%04d-%02d", c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1)
     }
+
+    private data class SimilarBucket(
+        val bucketId: String,
+        val timeWindow: Long,
+        val ratio: Int,
+        val longSide: Int,
+    ) {
+        companion object {
+            private const val WINDOW_MS = 5L * 60L * 1000L
+            private const val SIDE_BUCKET = 160
+
+            fun from(asset: MediaAsset): SimilarBucket {
+                val long = maxOf(asset.width, asset.height)
+                val short = minOf(asset.width, asset.height).coerceAtLeast(1)
+                return SimilarBucket(
+                    bucketId = asset.bucketId.ifEmpty { asset.bucketName },
+                    timeWindow = captureOrAddedMs(asset) / WINDOW_MS,
+                    ratio = (long * 100 / short),
+                    longSide = long / SIDE_BUCKET,
+                )
+            }
+        }
+    }
+
+    private fun captureOrAddedMs(asset: MediaAsset): Long =
+        when {
+            asset.capturedAt > 0 -> asset.capturedAt
+            asset.dateAdded > 0 -> asset.dateAdded * 1000L
+            else -> 0L
+        }
 }
