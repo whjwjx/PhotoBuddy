@@ -32,6 +32,15 @@ class DeleteCoordinator(
     }
 
     /**
+     * API 30+：从系统「最近删除 / 回收站」恢复（trashed = false）。
+     * 用于 App 内「最近删除」的一键恢复。
+     */
+    fun createRestoreRequest(uris: List<Uri>): PendingIntent? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        return runCatching { MediaStore.createTrashRequest(resolver, uris, false) }.getOrNull()
+    }
+
+    /**
      * API 30+：【降级】永久删除，不可恢复。
      * 仅在系统不支持回收站时使用；PRD 要求优先走最近删除，所以不要默认调它。
      */

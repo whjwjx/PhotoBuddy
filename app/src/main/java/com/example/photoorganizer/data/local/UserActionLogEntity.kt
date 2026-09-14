@@ -13,6 +13,8 @@ data class UserActionLogEntity(
     val deviceId: String = "local",
     val mediaId: Long,
     val mediaName: String,
+    /** IMAGE / VIDEO，恢复时需要用它拼出正确的 MediaStore URI。 */
+    val mediaType: String = "IMAGE",
     val action: String,
     /** 来源队列，例如「随机整理」或「按月份 · 2026-09」。 */
     val source: String,

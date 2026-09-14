@@ -13,7 +13,7 @@ import androidx.room.RoomDatabase
         MediaIndexEntity::class,
         UserActionLogEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

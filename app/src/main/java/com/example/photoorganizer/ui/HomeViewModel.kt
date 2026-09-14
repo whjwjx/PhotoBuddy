@@ -2,9 +2,11 @@ package com.example.photoorganizer.ui
 
 import android.Manifest
 import android.app.Application
+import android.content.ContentUris
 import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.MediaStore
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -75,6 +77,10 @@ data class HomeUiState(
     val recentLogs: List<UserActionLogEntity> = emptyList(),
     /** 是否为 Android 14+ 的「部分照片访问」模式。 */
     val partialAccess: Boolean = false,
+    /** 本 App 删除、仍可恢复的项（App 内「最近删除」）。 */
+    val deletedLogs: List<UserActionLogEntity> = emptyList(),
+    val pendingRestore: IntentSender? = null,
+    val restoringLogId: Long? = null,
 ) {
     val current: MediaAsset? get() = queueItems.getOrNull(currentIndex)
     val remaining: Int get() = (queueItems.size - currentIndex).coerceAtLeast(0)
@@ -146,6 +152,9 @@ class HomeViewModel(
         }
         viewModelScope.launch {
             logDao.observeRecent(20).collect { list -> _uiState.update { it.copy(recentLogs = list) } }
+        }
+        viewModelScope.launch {
+            logDao.observeDeleted(20).collect { list -> _uiState.update { it.copy(deletedLogs = list) } }
         }
 
         // Android 14+「部分照片访问」检测：这种情况 App 只能看到用户勾选的少量照片，
@@ -397,6 +406,57 @@ class HomeViewModel(
         _uiState.update { it.copy(pendingBatchDelete = null, batchIdsInFlight = emptySet()) }
     }
 
+    // ---------------- 恢复（App 内「最近删除」） ----------------
+
+    /**
+     * 从系统回收站恢复。
+     * 厂商相册（如华为「最近删除」）是 App 私有实现，第三方无法写入；
+     * 因此这里自己维护一份可恢复列表，用 createTrashRequest(trashed=false) 走系统恢复。
+     */
+    fun restore(log: UserActionLogEntity) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            _uiState.update { it.copy(error = "该系统版本不支持从回收站恢复") }
+            return
+        }
+        val uri =
+            if (log.mediaType == MediaType.VIDEO.name) {
+                ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, log.mediaId)
+            } else {
+                ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, log.mediaId)
+            }
+        val sender = coordinator.createRestoreRequest(listOf(uri))?.intentSender
+        if (sender == null) {
+            _uiState.update { it.copy(error = "无法恢复《${log.mediaName}》，可能已被彻底清除") }
+        } else {
+            _uiState.update { it.copy(pendingRestore = sender, restoringLogId = log.id) }
+        }
+    }
+
+    /**
+     * 系统恢复确认通过：重建索引并**实际校验**照片是否回来了。
+     * 只有真的回到媒体库才标记为已恢复，否则明确告知用户（避免"假装恢复成功"）。
+     */
+    fun onRestoreApproved() {
+        val id = _uiState.value.restoringLogId ?: return
+        val log = _uiState.value.deletedLogs.firstOrNull { it.id == id }
+        viewModelScope.launch {
+            runCatching { library.sync(full = true) }
+            val back = log != null && indexDao.allIds().contains(log.mediaId)
+            if (back) {
+                logDao.updateAction(id, "restore")
+            } else {
+                _uiState.update {
+                    it.copy(error = "《${log?.mediaName ?: "该照片"}》未能恢复，可能已被系统彻底清除")
+                }
+            }
+            _uiState.update { it.copy(pendingRestore = null, restoringLogId = null) }
+        }
+    }
+
+    fun clearPendingRestore() {
+        _uiState.update { it.copy(pendingRestore = null, restoringLogId = null) }
+    }
+
     // ---------------- 设置 ----------------
 
     fun setProtectFavorite(v: Boolean) {
@@ -458,6 +518,7 @@ class HomeViewModel(
             UserActionLogEntity(
                 mediaId = asset.id,
                 mediaName = asset.displayName,
+                mediaType = asset.mediaType.name,
                 action = status.value,
                 source = source,
                 beforeState = before,
@@ -496,6 +557,7 @@ class HomeViewModel(
                     UserActionLogEntity(
                         mediaId = asset.id,
                         mediaName = asset.displayName,
+                        mediaType = asset.mediaType.name,
                         action = MediaStatus.DELETE.value,
                         source = source,
                         beforeState = before,

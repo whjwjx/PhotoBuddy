@@ -1,5 +1,9 @@
 package com.example.photoorganizer.ui
 
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,11 +21,14 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -40,6 +47,17 @@ fun HomeScreen(onStartOrganize: () -> Unit) {
     val vm: HomeViewModel = viewModel()
     val state by vm.uiState.collectAsState()
     val context = LocalContext.current
+
+    // 从系统回收站恢复（App 内「最近删除」）
+    val restoreLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) vm.onRestoreApproved() else vm.clearPendingRestore()
+        }
+    LaunchedEffect(state.pendingRestore) {
+        state.pendingRestore?.let { sender ->
+            restoreLauncher.launch(IntentSenderRequest.Builder(sender).build())
+        }
+    }
 
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) }) { padding ->
         Column(
@@ -146,6 +164,41 @@ fun HomeScreen(onStartOrganize: () -> Unit) {
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                        }
+                    }
+                }
+            }
+
+            // 本 App 删除、仍可恢复的项（厂商相册私有「最近删除」第三方无法写入，故自建一份）
+            if (state.deletedLogs.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("最近删除（可恢复）", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "这些是本 App 删除的照片，仍系统回收站中，可一键恢复。",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        state.deletedLogs.take(5).forEach { log ->
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.fillMaxWidth(0.6f)) {
+                                    Text(
+                                        log.mediaName,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        formatDate(log.createdAt),
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                                TextButton(onClick = { vm.restore(log) }) { Text("恢复") }
+                            }
                         }
                     }
                 }
