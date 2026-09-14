@@ -23,6 +23,8 @@ data class MediaAsset(
     val bucketName: String,
     val isFavorite: Boolean,
     val mediaType: MediaType,
+    /** MediaStore DATE_ADDED（秒），用于增量扫描判断新增。 */
+    val dateAdded: Long = 0L,
 ) {
     /** 截图判定（文件名/相册名含 screenshot 或中文「截图」）。供队列与统计复用。 */
     fun isScreenshot(): Boolean =

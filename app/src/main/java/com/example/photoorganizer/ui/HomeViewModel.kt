@@ -5,7 +5,9 @@ import android.content.IntentSender
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.photoorganizer.data.DailyProgress
 import com.example.photoorganizer.data.MediaAsset
+import com.example.photoorganizer.data.MediaLibraryRepository
 import com.example.photoorganizer.data.MediaStoreRepository
 import com.example.photoorganizer.data.MediaType
 import com.example.photoorganizer.data.OrganizeSettings
@@ -19,6 +21,7 @@ import com.example.photoorganizer.domain.DeleteCoordinator
 import com.example.photoorganizer.domain.MediaQueue
 import com.example.photoorganizer.domain.QueueEngine
 import com.example.photoorganizer.domain.QueueType
+import com.example.photoorganizer.worker.ScanWorker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,7 +32,7 @@ private const val DAY_MS = 24L * 60 * 60 * 1000
 
 data class HomeUiState(
     val isScanning: Boolean = false,
-    /** 扫描到的全部媒体（未过滤）。 */
+    /** 本地媒体索引（来自 Room），App 启动即可用。 */
     val allAssets: List<MediaAsset> = emptyList(),
     /** 按相册/类型过滤后的工作集，统计基于此。 */
     val assets: List<MediaAsset> = emptyList(),
@@ -47,7 +50,6 @@ data class HomeUiState(
     val error: String? = null,
     /** API 30+ 待启动的系统删除确认 IntentSender（单个）。 */
     val pendingDelete: IntentSender? = null,
-    // --- P3 ---
     val settings: OrganizeSettings = OrganizeSettings(),
     val albums: List<AlbumEntity> = emptyList(),
     val albumCounts: Map<Long, Int> = emptyMap(),
@@ -59,12 +61,19 @@ data class HomeUiState(
     val selectedIds: Set<Long> = emptySet(),
     val batchIdsInFlight: Set<Long> = emptySet(),
     val pendingBatchDelete: IntentSender? = null,
+    // --- P4：增量扫描 / 每日整理任务 ---
+    val lastScanMs: Long = 0L,
+    val lastSyncAdded: Int = 0,
+    val daily: DailyProgress = DailyProgress("", 0),
 ) {
     val current: MediaAsset? get() = queueItems.getOrNull(currentIndex)
     val remaining: Int get() = (queueItems.size - currentIndex).coerceAtLeast(0)
 
     /** 安全策略命中的高风险项（收藏 / 最近拍摄），默认不进入批量删除。 */
     val highRiskCount: Int get() = queueItems.count { isProtected(it) }
+
+    /** 今日任务是否完成。 */
+    val dailyDone: Boolean get() = daily.count >= settings.dailyGoal && settings.dailyGoal > 0
 
     fun isProtected(asset: MediaAsset): Boolean =
         (settings.protectFavorite && asset.isFavorite) ||
@@ -80,16 +89,29 @@ data class HomeUiState(
 class HomeViewModel(
     app: Application,
 ) : AndroidViewModel(app) {
-    private val repo = MediaStoreRepository(app.contentResolver)
-    private val dao = AppDatabase.getDatabase(app).mediaStatusDao()
-    private val albumDao = AppDatabase.getDatabase(app).albumDao()
+    private val db = AppDatabase.getDatabase(app)
+    private val dao = db.mediaStatusDao()
+    private val albumDao = db.albumDao()
+    private val indexDao = db.mediaIndexDao()
     private val coordinator = DeleteCoordinator(app.contentResolver)
     private val settingsRepo = SettingsRepository(app)
+    private val library =
+        MediaLibraryRepository(
+            MediaStoreRepository(app.contentResolver),
+            indexDao,
+            settingsRepo,
+        )
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     init {
+        // 媒体索引：App 启动直接从 Room 读，不用等 MediaStore 全量查询
+        viewModelScope.launch {
+            library.observeAssets().collect { assets ->
+                _uiState.update { s -> recompute(s.copy(allAssets = assets.sortedBy { shuffleKey(it.id) })) }
+            }
+        }
         viewModelScope.launch {
             dao.observeAll().collect { list -> _uiState.update { s -> recompute(s.copy(statuses = list)) } }
         }
@@ -104,18 +126,42 @@ class HomeViewModel(
         viewModelScope.launch {
             settingsRepo.settings.collect { s -> _uiState.update { it.copy(settings = s) } }
         }
+        viewModelScope.launch {
+            settingsRepo.daily.collect { d -> _uiState.update { it.copy(daily = d) } }
+        }
+
+        // 后台增量扫描：首次为空则全量，否则增量
+        viewModelScope.launch {
+            ScanWorker.enqueuePeriodic(app)
+            if (indexDao.count() == 0) {
+                scan(full = true)
+            } else {
+                ScanWorker.enqueueOnce(app)
+                _uiState.update { it.copy(lastScanMs = settingsRepo.getLastScanMs()) }
+            }
+        }
     }
 
-    fun scan() {
+    /**
+     * 同步媒体库。
+     * @param full true=全量重建；false=只同步上次扫描之后新增/删除的部分。
+     */
+    fun scan(full: Boolean = false) {
         _uiState.update {
             it.copy(isScanning = true, error = null, currentIndex = 0, processedCount = 0, freedBytes = 0)
         }
         viewModelScope.launch {
-            runCatching { repo.loadAll() }
-                .onSuccess { assets ->
-                    val shuffled = assets.shuffled()
+            runCatching { library.sync(full) }
+                .onSuccess { added ->
                     _uiState.update { s ->
-                        recompute(s.copy(isScanning = false, allAssets = shuffled, currentIndex = 0))
+                        recompute(
+                            s.copy(
+                                isScanning = false,
+                                currentIndex = 0,
+                                lastScanMs = System.currentTimeMillis(),
+                                lastSyncAdded = added,
+                            ),
+                        )
                     }
                 }.onFailure { e ->
                     _uiState.update { it.copy(isScanning = false, error = e.message) }
@@ -191,7 +237,7 @@ class HomeViewModel(
         _uiState.update { it.copy(pendingDelete = null) }
     }
 
-    // ---------------- P3：应用内相册 ----------------
+    // ---------------- 应用内相册 ----------------
 
     fun createAlbum(name: String) {
         val trimmed = name.trim()
@@ -232,7 +278,7 @@ class HomeViewModel(
         }
     }
 
-    // ---------------- P3：批量确认 ----------------
+    // ---------------- 批量确认 ----------------
 
     fun enterBatch() {
         val s = _uiState.value
@@ -297,7 +343,7 @@ class HomeViewModel(
         _uiState.update { it.copy(pendingBatchDelete = null, batchIdsInFlight = emptySet()) }
     }
 
-    // ---------------- P3：设置 ----------------
+    // ---------------- 设置 ----------------
 
     fun setProtectFavorite(v: Boolean) {
         viewModelScope.launch { settingsRepo.setProtectFavorite(v) }
@@ -311,7 +357,18 @@ class HomeViewModel(
         viewModelScope.launch { settingsRepo.setBatchChunk(v) }
     }
 
+    fun setDailyGoal(v: Int) {
+        viewModelScope.launch { settingsRepo.setDailyGoal(v) }
+    }
+
     // ---------------- 内部 ----------------
+
+    /** 稳定伪随机排序：同一 id 始终落在同一位置，新增照片不会打乱已有卡片顺序。 */
+    private fun shuffleKey(id: Long): Long {
+        var x = id * 6364136223846793005L + 1442695040888963407L
+        x = x xor (x shr 32)
+        return x
+    }
 
     /** 依据「全部媒体 + 筛选条件 + 已处理集合」重算工作集、队列和当前卡片列表。 */
     private fun recompute(s: HomeUiState): HomeUiState {
@@ -341,6 +398,7 @@ class HomeViewModel(
         status: MediaStatus,
     ) {
         dao.upsert(toEntity(asset, status))
+        settingsRepo.addProcessed(1)
         _uiState.update { s ->
             val isDelete = status == MediaStatus.DELETE
             // 删除后立即移出内存列表，避免已进回收站的照片仍出现在卡片流和统计里。
@@ -367,6 +425,7 @@ class HomeViewModel(
                 freed += asset.size
             }
         }
+        settingsRepo.addProcessed(ids.size)
         _uiState.update { s ->
             recompute(
                 s.copy(
@@ -374,10 +433,10 @@ class HomeViewModel(
                     freedBytes = s.freedBytes + freed,
                     processedCount = s.processedCount + ids.size,
                     selectedIds = s.selectedIds - ids,
-                batchIdsInFlight = emptySet(),
-                pendingBatchDelete = null,
-                showBatch = false,
-                currentIndex = 0,
+                    batchIdsInFlight = emptySet(),
+                    pendingBatchDelete = null,
+                    showBatch = false,
+                    currentIndex = 0,
                 ),
             )
         }

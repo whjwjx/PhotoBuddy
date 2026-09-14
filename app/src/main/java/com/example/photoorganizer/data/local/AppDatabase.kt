@@ -10,14 +10,17 @@ import androidx.room.RoomDatabase
         MediaStatusEntity::class,
         AlbumEntity::class,
         AlbumItemEntity::class,
+        MediaIndexEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun mediaStatusDao(): MediaStatusDao
 
     abstract fun albumDao(): AlbumDao
+
+    abstract fun mediaIndexDao(): MediaIndexDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -30,7 +33,7 @@ abstract class AppDatabase : RoomDatabase() {
                         AppDatabase::class.java,
                         "photo_organizer.db",
                     )
-                    // MVP 阶段本地整理状态可重建，升级时直接重建，避免缺少迁移导致崩溃。
+                    // MVP 阶段本地状态与索引均可从 MediaStore 重建，升级时直接重建。
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { INSTANCE = it }

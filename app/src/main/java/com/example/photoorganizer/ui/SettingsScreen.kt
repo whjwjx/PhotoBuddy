@@ -39,6 +39,8 @@ fun SettingsScreen() {
     LaunchedEffect(s.protectRecentDays) { daysText = s.protectRecentDays.toString() }
     var chunkText by remember { mutableStateOf(s.batchChunkSize.toString()) }
     LaunchedEffect(s.batchChunkSize) { chunkText = s.batchChunkSize.toString() }
+    var goalText by remember { mutableStateOf(s.dailyGoal.toString()) }
+    LaunchedEffect(s.dailyGoal) { goalText = s.dailyGoal.toString() }
 
     Scaffold(topBar = { TopAppBar(title = { Text("设置") }) }) { padding ->
         Column(
@@ -105,6 +107,25 @@ fun SettingsScreen() {
                             onValueChange = { text ->
                                 chunkText = text
                                 text.toIntOrNull()?.let { vm.setBatchChunk(it) }
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(0.35f),
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.fillMaxWidth(0.55f)) {
+                            Text("每日整理目标")
+                            Text(
+                                "每天整理多少张算完成今日任务",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        OutlinedTextField(
+                            value = goalText,
+                            onValueChange = { text ->
+                                goalText = text
+                                text.toIntOrNull()?.let { vm.setDailyGoal(it) }
                             },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(0.35f),

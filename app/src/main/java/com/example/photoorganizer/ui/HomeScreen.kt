@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -54,6 +55,23 @@ fun HomeScreen(onStartOrganize: () -> Unit) {
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = 8.dp),
                 )
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("今日整理任务", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = state.daily.percent(state.settings.dailyGoal),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text("已整理 ${state.daily.count} / ${state.settings.dailyGoal} 张")
+                    if (state.dailyDone) {
+                        Text("今日目标已完成，明天继续！")
+                    }
+                }
             }
 
             Spacer(Modifier.height(12.dp))
