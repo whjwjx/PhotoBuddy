@@ -93,6 +93,7 @@ fun TrashScreen(onExit: () -> Unit) {
         }
     val visibleIds = remember(visibleItems) { visibleItems.map { it.id }.toSet() }
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
+    var pendingDeleteIds by remember { mutableStateOf(emptySet<Long>()) }
 
     LaunchedEffect(visibleIds) {
         selectedIds = visibleIds
@@ -150,7 +151,7 @@ fun TrashScreen(onExit: () -> Unit) {
                             Text("恢复")
                         }
                         Button(
-                            onClick = { vm.requestDeleteTrash(selectedIds) },
+                            onClick = { pendingDeleteIds = selectedIds },
                             enabled = selectedIds.isNotEmpty(),
                             modifier = Modifier.weight(1f),
                         ) {
@@ -187,6 +188,26 @@ fun TrashScreen(onExit: () -> Unit) {
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+                }
+                state.error?.let { message ->
+                    Spacer(Modifier.height(10.dp))
+                    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
+                        Row(
+                            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                message,
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            TextButton(onClick = { vm.clearError() }) {
+                                Text("知道了")
+                            }
+                        }
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -246,10 +267,23 @@ fun TrashScreen(onExit: () -> Unit) {
                 previewAsset = null
             },
             onDelete = {
-                vm.requestDeleteTrash(setOf(asset.id))
+                pendingDeleteIds = setOf(asset.id)
                 previewAsset = null
             },
             onDismiss = { previewAsset = null },
+        )
+    }
+
+    if (pendingDeleteIds.isNotEmpty()) {
+        val pendingAssets = state.trashItems.filter { it.id in pendingDeleteIds }
+        DeleteConfirmDialog(
+            count = pendingAssets.size,
+            bytes = pendingAssets.sumOf { it.size },
+            onConfirm = {
+                vm.requestDeleteTrash(pendingDeleteIds)
+                pendingDeleteIds = emptySet()
+            },
+            onDismiss = { pendingDeleteIds = emptySet() },
         )
     }
 }
@@ -361,6 +395,39 @@ private fun TrashPreviewDialog(
             Row {
                 TextButton(onClick = onRestore) { Text("恢复") }
                 TextButton(onClick = onDismiss) { Text("关闭") }
+            }
+        },
+    )
+}
+
+@Composable
+private fun DeleteConfirmDialog(
+    count: Int,
+    bytes: Long,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("确认删除 $count 项？") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("预计释放 ${formatBytes(bytes)}。确认前，这些照片仍只是在 App 的待删除列表中。")
+                Text(
+                    deletePolicyText(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "移入最近删除" else "永久删除")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("再看看")
             }
         },
     )

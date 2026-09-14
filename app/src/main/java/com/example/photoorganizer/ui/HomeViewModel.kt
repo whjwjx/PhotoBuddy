@@ -369,6 +369,10 @@ class HomeViewModel(
         _uiState.update { it.copy(pendingDelete = null, trashDeleteIdsInFlight = emptySet()) }
     }
 
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
     /** 从待删除恢复到未整理队列。 */
     fun restoreFromTrash(ids: Set<Long>) {
         if (ids.isEmpty()) return
