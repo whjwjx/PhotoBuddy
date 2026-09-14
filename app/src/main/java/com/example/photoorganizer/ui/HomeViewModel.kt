@@ -738,7 +738,6 @@ class HomeViewModel(
                 createdAt = System.currentTimeMillis(),
             ),
         )
-        settingsRepo.addProcessed(1)
         _uiState.update { s ->
             recompute(
                 s.copy(
@@ -754,6 +753,7 @@ class HomeViewModel(
                 ),
             )
         }
+        settingsRepo.addProcessed(1)
     }
 
     private fun actionMessage(status: MediaStatus): String =
