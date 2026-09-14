@@ -63,6 +63,9 @@ fun StatsScreen(
         remember(stats.total, state.organizedCount) {
             if (stats.total == 0) 0f else (state.organizedCount.toFloat() / stats.total).coerceIn(0f, 1f)
         }
+    val todayGoal = state.settings.dailyGoal.coerceAtLeast(0)
+    val todayRemaining = (todayGoal - state.daily.count).coerceAtLeast(0)
+    val dailyProgress = state.daily.percent(todayGoal)
     val queueProgressItems =
         remember(state.queues) {
             listOf(
@@ -74,6 +77,7 @@ fun StatsScreen(
             )
                 .mapNotNull { type -> state.queues.firstOrNull { it.type == type } }
         }
+    val recommendedQueue = queueProgressItems.firstOrNull { it.items.isNotEmpty() }
 
     Scaffold(topBar = { TopAppBar(title = { Text("统计") }) }) { padding ->
         Column(
@@ -96,6 +100,28 @@ fun StatsScreen(
                         progress = { organizedProgress },
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    Text(
+                        if (state.dailyDone) {
+                            "今日目标已完成，可以轻松收工。"
+                        } else {
+                            "今天已整理 ${state.daily.count} 张，还差 $todayRemaining 张到今日目标。"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    LinearProgressIndicator(
+                        progress = { dailyProgress },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    recommendedQueue?.let { queue ->
+                        Text(
+                            "下一步建议：${queue.displayName} · ${queue.items.size} 项",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
 
