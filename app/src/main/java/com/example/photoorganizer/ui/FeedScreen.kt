@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -62,6 +64,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -116,6 +120,12 @@ fun FeedScreen(
                     dragX = x
                     dragY = y
                 },
+            )
+            EdgeTapNavigation(
+                currentIndex = state.currentIndex,
+                total = state.queueItems.size,
+                onPrevious = { vm.setIndex(state.currentIndex - 1) },
+                onNext = { vm.setIndex(state.currentIndex + 1) },
             )
 
             TopBar(
@@ -209,6 +219,54 @@ fun FeedScreen(
             onDismiss = { showQueue = false },
         )
     }
+}
+
+@Composable
+private fun EdgeTapNavigation(
+    currentIndex: Int,
+    total: Int,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .padding(top = 120.dp, bottom = 268.dp),
+    ) {
+        EdgeTapZone(
+            enabled = currentIndex > 0,
+            contentDescription = "上一张",
+            modifier = Modifier.align(Alignment.CenterStart),
+            onClick = onPrevious,
+        )
+        EdgeTapZone(
+            enabled = currentIndex + 1 < total,
+            contentDescription = "下一张",
+            modifier = Modifier.align(Alignment.CenterEnd),
+            onClick = onNext,
+        )
+    }
+}
+
+@Composable
+private fun EdgeTapZone(
+    enabled: Boolean,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier
+            .fillMaxHeight()
+            .width(86.dp)
+            .semantics { this.contentDescription = contentDescription }
+            .clickable(
+                enabled = enabled,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+    )
 }
 
 @Composable
