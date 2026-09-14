@@ -103,6 +103,8 @@ fun TrashScreen(onExit: () -> Unit) {
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     var pendingDeleteIds by remember { mutableStateOf(emptySet<Long>()) }
     val allVisibleSelected = visibleItems.isNotEmpty() && visibleIds.all { it in selectedIds }
+    val totalBytes = items.sumOf { it.size }
+    val visibleBytes = visibleItems.sumOf { it.size }
     val selectedBytes = visibleItems.sumSelectedBytes(selectedIds)
 
     LaunchedEffect(visibleIds) {
@@ -164,19 +166,29 @@ fun TrashScreen(onExit: () -> Unit) {
                     .padding(horizontal = 12.dp),
             ) {
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
-                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
                             if (sourceFilter == null) {
-                                "${items.size} 项等待确认"
+                                "${items.size} 项等待复核"
                             } else {
-                                "${visibleItems.size} 项来自 $sourceFilter"
+                                "$sourceFilter · ${visibleItems.size} 项"
                             },
                             style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            "确认前不会删除。选中的项目会在这里统一复核。",
+                            "确认前不会删除；恢复会回到未整理队列，删除会先交给系统确认。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        TrashReviewSummary(
+                            totalCount = items.size,
+                            totalBytes = totalBytes,
+                            visibleCount = visibleItems.size,
+                            visibleBytes = visibleBytes,
+                            selectedCount = selectedIds.size,
+                            selectedBytes = selectedBytes,
+                            filtered = sourceFilter != null,
                         )
                         Text(
                             deletePolicyText(),
@@ -503,7 +515,7 @@ private fun TrashPreviewDialog(
         },
         confirmButton = {
             Button(onClick = onDelete) {
-                Text("确认删除")
+                Text(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "移入最近删除" else "永久删除")
             }
         },
         dismissButton = {
@@ -524,10 +536,12 @@ private fun DeleteConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("确认删除 $count 项？") },
+        title = {
+            Text(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "移入最近删除 $count 项？" else "永久删除 $count 项？")
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("预计释放 ${formatBytes(bytes)}。确认前，这些照片仍只是在 App 的待删除列表中。")
+                Text("预计释放 ${formatBytes(bytes)}。系统确认前，这些照片仍只是在 App 的待删除列表中。")
                 Text(
                     deletePolicyText(),
                     style = MaterialTheme.typography.bodySmall,
@@ -546,6 +560,74 @@ private fun DeleteConfirmDialog(
             }
         },
     )
+}
+
+@Composable
+private fun TrashReviewSummary(
+    totalCount: Int,
+    totalBytes: Long,
+    visibleCount: Int,
+    visibleBytes: Long,
+    selectedCount: Int,
+    selectedBytes: Long,
+    filtered: Boolean,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        TrashSummaryPill(
+            label = if (filtered) "当前来源" else "全部待删",
+            value =
+                if (filtered) {
+                    "$visibleCount 项"
+                } else {
+                    "$totalCount 项"
+                },
+            helper =
+                if (filtered) {
+                    formatBytes(visibleBytes)
+                } else {
+                    formatBytes(totalBytes)
+                },
+            modifier = Modifier.weight(1f),
+        )
+        TrashSummaryPill(
+            label = "已选",
+            value = "$selectedCount 项",
+            helper = formatBytes(selectedBytes),
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun TrashSummaryPill(
+    label: String,
+    value: String,
+    helper: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        Text(
+            helper,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 @Composable
