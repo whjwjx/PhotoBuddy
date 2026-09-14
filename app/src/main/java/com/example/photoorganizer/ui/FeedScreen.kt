@@ -735,10 +735,38 @@ private fun ActionBar(
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FeedAction(Icons.Default.DeleteOutline, "待删除", onTrash)
-        FeedAction(Icons.Default.Schedule, "稍后", onLater)
-        FeedAction(Icons.Default.Check, "保留", onKeep)
-        FeedAction(Icons.Default.Star, "收藏", onFavorite)
+        FeedAction(
+            icon = Icons.Default.DeleteOutline,
+            label = "待删除",
+            helper = "上滑",
+            accent = Color(0xFFFF453A),
+            modifier = Modifier.weight(1f),
+            onClick = onTrash,
+        )
+        FeedAction(
+            icon = Icons.Default.Schedule,
+            label = "稍后",
+            helper = "左滑",
+            accent = Color(0xFF8E8E93),
+            modifier = Modifier.weight(1f),
+            onClick = onLater,
+        )
+        FeedAction(
+            icon = Icons.Default.Check,
+            label = "保留",
+            helper = "右滑",
+            accent = Color(0xFF34C759),
+            modifier = Modifier.weight(1f),
+            onClick = onKeep,
+        )
+        FeedAction(
+            icon = Icons.Default.Star,
+            label = "收藏",
+            helper = "下滑",
+            accent = Color(0xFFFFCC00),
+            modifier = Modifier.weight(1f),
+            onClick = onFavorite,
+        )
     }
 }
 
@@ -1223,26 +1251,43 @@ private fun suggestedNextQueue(state: HomeUiState): MediaQueue? {
 private fun FeedAction(
     icon: ImageVector,
     label: String,
+    helper: String,
+    accent: Color,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     Column(
         modifier =
-            Modifier
+            modifier
                 .clip(RoundedCornerShape(8.dp))
                 .clickable(onClick = onClick)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 4.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
             Modifier
-                .size(40.dp)
-                .background(Color.White.copy(alpha = 0.14f), CircleShape),
+                .size(42.dp)
+                .background(accent.copy(alpha = 0.22f), CircleShape)
+                .border(BorderStroke(1.dp, accent.copy(alpha = 0.48f)), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = label, tint = Color.White)
+            Icon(icon, contentDescription = label, tint = accent)
         }
         Spacer(Modifier.height(4.dp))
-        Text(label, color = Color.White, style = MaterialTheme.typography.bodySmall)
+        Text(
+            label,
+            color = Color.White,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            helper,
+            color = Color.White.copy(alpha = 0.52f),
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
