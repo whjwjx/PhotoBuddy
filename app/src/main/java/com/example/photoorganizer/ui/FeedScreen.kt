@@ -469,6 +469,13 @@ private fun SimilarComparisonStrip(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                Text(
+                    similarGroupMeta(candidates.map { it.asset }),
+                    color = Color.White.copy(alpha = 0.66f),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             TextButton(onClick = onLaterAll) {
                 Text("全部稍后", color = Color.White)
@@ -1008,6 +1015,44 @@ private fun similarMeta(asset: MediaAsset): String =
         if (asset.capturedAt > 0) append(" · ${formatDate(asset.capturedAt)}")
         if (asset.bucketName.isNotEmpty()) append(" · ${asset.bucketName}")
     }
+
+private fun similarGroupMeta(items: List<MediaAsset>): String {
+    val capturedTimes =
+        items
+            .mapNotNull { captureOrAddedMs(it).takeIf { ms -> ms > 0L } }
+            .sorted()
+    val timeText =
+        if (capturedTimes.size >= 2) {
+            "时间差 ${formatTimeSpan(capturedTimes.last() - capturedTimes.first())}"
+        } else {
+            "时间差未知"
+        }
+    val sizes = items.map { it.size }.filter { it > 0L }.sorted()
+    val sizeText =
+        when {
+            sizes.isEmpty() -> "大小未知"
+            sizes.first() == sizes.last() -> "大小 ${formatBytes(sizes.first())}"
+            else -> "大小 ${formatBytes(sizes.first())} - ${formatBytes(sizes.last())}"
+        }
+    return "$timeText · $sizeText"
+}
+
+private fun captureOrAddedMs(asset: MediaAsset): Long =
+    when {
+        asset.capturedAt > 0 -> asset.capturedAt
+        asset.dateAdded > 0 -> asset.dateAdded * 1000L
+        else -> 0L
+    }
+
+private fun formatTimeSpan(ms: Long): String {
+    val totalMinutes = (ms / 60_000L).coerceAtLeast(0L)
+    return when {
+        totalMinutes < 1L -> "1 分钟内"
+        totalMinutes < 60L -> "$totalMinutes 分钟"
+        totalMinutes < 24L * 60L -> "${totalMinutes / 60L} 小时 ${totalMinutes % 60L} 分钟"
+        else -> "${totalMinutes / (24L * 60L)} 天"
+    }
+}
 
 @Composable
 private fun EmptyQueue(
