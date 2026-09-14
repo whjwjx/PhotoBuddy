@@ -3,6 +3,7 @@ package com.example.photoorganizer.ui
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -76,6 +78,7 @@ import com.example.photoorganizer.data.MediaAsset
 import com.example.photoorganizer.data.MediaType
 import com.example.photoorganizer.data.local.AlbumEntity
 import com.example.photoorganizer.data.local.MediaStatus
+import com.example.photoorganizer.domain.QueueType
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.min
@@ -140,6 +143,13 @@ fun FeedScreen(
                         .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                if (state.queueType == QueueType.SIMILAR && state.queueItems.size > 1) {
+                    SimilarComparisonStrip(
+                        items = state.queueItems,
+                        currentIndex = state.currentIndex,
+                        onPick = { vm.setIndex(it) },
+                    )
+                }
                 AssetCaption(asset = asset)
                 ActionBar(
                     onTrash = { vm.act(MediaStatus.TRASH) },
@@ -250,6 +260,65 @@ private fun FeedPage(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit,
             )
+        }
+    }
+}
+
+@Composable
+private fun SimilarComparisonStrip(
+    items: List<MediaAsset>,
+    currentIndex: Int,
+    onPick: (Int) -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(Color.Black.copy(alpha = 0.54f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "相似组 ${currentIndex + 1}/${items.size}",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "点缩略图切换候选，选出要保留或待删除的照片。",
+                    color = Color.White.copy(alpha = 0.72f),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
+                val selected = index == currentIndex
+                Box(
+                    modifier =
+                        Modifier
+                            .size(58.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.White.copy(alpha = if (selected) 0.24f else 0.12f))
+                            .border(
+                                width = if (selected) 2.dp else 1.dp,
+                                color = if (selected) Color.White else Color.White.copy(alpha = 0.28f),
+                                shape = RoundedCornerShape(8.dp),
+                            )
+                            .clickable { onPick(index) }
+                            .padding(2.dp),
+                ) {
+                    AsyncImage(
+                        model = item.uri,
+                        contentDescription = item.displayName,
+                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(6.dp)),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+            }
         }
     }
 }
