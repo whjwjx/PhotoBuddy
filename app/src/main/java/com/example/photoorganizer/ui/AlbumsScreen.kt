@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PhotoAlbum
 import androidx.compose.material.icons.filled.RemoveCircleOutline
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -64,6 +65,7 @@ fun AlbumsScreen() {
     val vm: HomeViewModel = viewModel()
     val state by vm.uiState.collectAsState()
     var name by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
     var renameTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var deleteTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
@@ -103,7 +105,9 @@ fun AlbumsScreen() {
             AlbumList(
                 state = state,
                 draftName = name,
+                query = query,
                 onDraftChange = { name = it },
+                onQueryChange = { query = it },
                 onCreate = {
                     vm.createAlbum(name)
                     name = ""
@@ -161,7 +165,9 @@ fun AlbumsScreen() {
 private fun AlbumList(
     state: HomeUiState,
     draftName: String,
+    query: String,
     onDraftChange: (String) -> Unit,
+    onQueryChange: (String) -> Unit,
     onCreate: () -> Unit,
     onOpen: (Long) -> Unit,
     onRename: (AlbumEntity) -> Unit,
@@ -175,6 +181,17 @@ private fun AlbumList(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("App 内标签", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "这些相册用于整理流快速归类，不会移动系统相册里的文件；整理页会优先显示最近使用的标签。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("新建相册", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -193,11 +210,35 @@ private fun AlbumList(
             }
         }
 
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            label = { Text("搜索相册") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        val sortedAlbums =
+            remember(state.albums, state.albumCounts, state.albumLastAddedAt) {
+                sortAlbumsForManagement(
+                    albums = state.albums,
+                    counts = state.albumCounts,
+                    lastAddedAt = state.albumLastAddedAt,
+                )
+            }
+        val visibleAlbums =
+            sortedAlbums.filter { album ->
+                query.isBlank() || album.name.contains(query.trim(), ignoreCase = true)
+            }
+
         if (state.albums.isEmpty()) {
             EmptyAlbums()
+        } else if (visibleAlbums.isEmpty()) {
+            EmptyAlbumSearch(query = query)
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(state.albums, key = { it.id }) { album ->
+                items(visibleAlbums, key = { it.id }) { album ->
                     val cover = state.albumMediaIds[album.id]?.firstNotNullOfOrNull { id ->
                         state.allAssets.firstOrNull { it.id == id }
                     }
@@ -238,7 +279,7 @@ private fun AlbumRow(
             AlbumCover(cover = cover, modifier = Modifier.size(72.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(album.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("$count 项", style = MaterialTheme.typography.bodySmall)
+                Text("$count 项 · App 内标签", style = MaterialTheme.typography.bodySmall)
                 Text(
                     if (lastAddedAt > 0) "最近添加 ${formatDate(lastAddedAt)}" else "暂无内容",
                     style = MaterialTheme.typography.bodySmall,
@@ -305,18 +346,26 @@ private fun AlbumDetail(
                 Column(Modifier.weight(1f)) {
                     Text("${items.size} 项", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        if (selectedIds.isEmpty()) "点选照片可批量移出相册" else "已选 ${selectedIds.size} 项",
+                        if (selectedIds.isEmpty()) {
+                            "App 内标签，移出不会删除原照片"
+                        } else {
+                            "已选 ${selectedIds.size} 项"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                TextButton(onClick = onSelectAll, enabled = items.isNotEmpty()) {
-                    Text(if (selectedIds.size == items.size && items.isNotEmpty()) "全不选" else "全选")
+                if (items.isNotEmpty()) {
+                    TextButton(onClick = onSelectAll) {
+                        Text(if (selectedIds.size == items.size) "全不选" else "全选")
+                    }
                 }
-                OutlinedButton(onClick = onRemoveSelected, enabled = selectedIds.isNotEmpty()) {
-                    Icon(Icons.Default.RemoveCircleOutline, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("移出")
+                if (items.isNotEmpty()) {
+                    OutlinedButton(onClick = onRemoveSelected, enabled = selectedIds.isNotEmpty()) {
+                        Icon(Icons.Default.RemoveCircleOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("移出")
+                    }
                 }
             }
         }
@@ -378,6 +427,23 @@ private fun AlbumMediaTile(
 }
 
 @Composable
+private fun EmptyAlbumSearch(query: String) {
+    Column(
+        Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("没有找到「$query」", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "可以换个关键词，或者用上方输入框新建相册。",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
 private fun EmptyAlbums() {
     Column(
         Modifier.fillMaxSize().padding(24.dp),
@@ -393,6 +459,18 @@ private fun EmptyAlbums() {
         )
     }
 }
+
+private fun sortAlbumsForManagement(
+    albums: List<AlbumEntity>,
+    counts: Map<Long, Int>,
+    lastAddedAt: Map<Long, Long>,
+): List<AlbumEntity> =
+    albums.sortedWith(
+        compareByDescending<AlbumEntity> { lastAddedAt[it.id] ?: 0L }
+            .thenByDescending { counts[it.id] ?: 0 }
+            .thenByDescending { it.createdAt }
+            .thenBy { it.name },
+    )
 
 @Composable
 private fun EmptyAlbum(
