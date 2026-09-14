@@ -272,6 +272,7 @@ private fun SimilarComparisonStrip(
     currentIndex: Int,
     onPick: (Int) -> Unit,
 ) {
+    val current = items.getOrNull(currentIndex)
     Column(
         Modifier
             .fillMaxWidth()
@@ -294,6 +295,15 @@ private fun SimilarComparisonStrip(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                current?.let { asset ->
+                    Text(
+                        similarMeta(asset),
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -724,6 +734,13 @@ private fun sortedAlbumsForOrganize(
             .thenByDescending { it.createdAt }
             .thenBy { it.name },
     )
+
+private fun similarMeta(asset: MediaAsset): String =
+    buildString {
+        append("当前：${formatBytes(asset.size)}")
+        if (asset.capturedAt > 0) append(" · ${formatDate(asset.capturedAt)}")
+        if (asset.bucketName.isNotEmpty()) append(" · ${asset.bucketName}")
+    }
 
 @Composable
 private fun EmptyQueue(
