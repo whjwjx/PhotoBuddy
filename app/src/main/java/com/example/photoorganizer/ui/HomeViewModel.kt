@@ -468,6 +468,37 @@ class HomeViewModel(
         }
     }
 
+    fun mergeAlbum(
+        sourceAlbumId: Long,
+        targetAlbumId: Long,
+    ) {
+        if (sourceAlbumId == targetAlbumId) return
+        viewModelScope.launch {
+            val sourceItems = albumDao.getItems(sourceAlbumId)
+            sourceItems.forEach { item ->
+                albumDao.addItem(
+                    AlbumItemEntity(
+                        albumId = targetAlbumId,
+                        mediaId = item.mediaId,
+                        addedAt = item.addedAt,
+                    ),
+                )
+            }
+            albumDao.deleteAlbumItems(sourceAlbumId)
+            albumDao.deleteAlbum(sourceAlbumId)
+            settingsRepo.setAlbumPinned(sourceAlbumId, false)
+            settingsRepo.setAlbumHidden(sourceAlbumId, false)
+            val targetIds = albumDao.getItems(targetAlbumId).map { it.mediaId }
+            _uiState.update { s ->
+                if (s.openAlbumId == sourceAlbumId) {
+                    s.copy(openAlbumId = targetAlbumId, openAlbumMediaIds = targetIds)
+                } else {
+                    s
+                }
+            }
+        }
+    }
+
     fun setAlbumPinned(
         albumId: Long,
         pinned: Boolean,

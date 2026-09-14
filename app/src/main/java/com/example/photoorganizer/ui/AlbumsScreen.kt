@@ -74,6 +74,7 @@ fun AlbumsScreen() {
     var renameTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var deleteTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var mappingTarget by remember { mutableStateOf<AlbumEntity?>(null) }
+    var mergeTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     val openAlbum = state.albums.firstOrNull { it.id == state.openAlbumId }
     val openItems =
@@ -96,6 +97,9 @@ fun AlbumsScreen() {
                 },
                 actions = {
                     if (openAlbum != null) {
+                        IconButton(onClick = { mergeTarget = openAlbum }) {
+                            Icon(Icons.Default.PhotoAlbum, contentDescription = "合并相册")
+                        }
                         IconButton(onClick = { renameTarget = openAlbum }) {
                             Icon(Icons.Default.Edit, contentDescription = "重命名")
                         }
@@ -121,6 +125,7 @@ fun AlbumsScreen() {
                 onOpen = { vm.openAlbum(it) },
                 onRename = { renameTarget = it },
                 onDelete = { deleteTarget = it },
+                onMerge = { mergeTarget = it },
                 onShowMapping = { mappingTarget = it },
                 onTogglePin = { albumId, pinned -> vm.setAlbumPinned(albumId, pinned) },
                 onToggleHidden = { albumId, hidden -> vm.setAlbumHidden(albumId, hidden) },
@@ -175,6 +180,19 @@ fun AlbumsScreen() {
             onDismiss = { mappingTarget = null },
         )
     }
+
+    mergeTarget?.let { album ->
+        MergeAlbumDialog(
+            album = album,
+            albums = state.albums,
+            count = state.albumCounts[album.id] ?: 0,
+            onConfirm = { targetAlbumId ->
+                vm.mergeAlbum(album.id, targetAlbumId)
+                mergeTarget = null
+            },
+            onDismiss = { mergeTarget = null },
+        )
+    }
 }
 
 @Composable
@@ -188,6 +206,7 @@ private fun AlbumList(
     onOpen: (Long) -> Unit,
     onRename: (AlbumEntity) -> Unit,
     onDelete: (AlbumEntity) -> Unit,
+    onMerge: (AlbumEntity) -> Unit,
     onShowMapping: (AlbumEntity) -> Unit,
     onTogglePin: (Long, Boolean) -> Unit,
     onToggleHidden: (Long, Boolean) -> Unit,
@@ -273,6 +292,7 @@ private fun AlbumList(
                         onOpen = { onOpen(album.id) },
                         onRename = { onRename(album) },
                         onDelete = { onDelete(album) },
+                        onMerge = { onMerge(album) },
                         onShowMapping = { onShowMapping(album) },
                         onTogglePin = { onTogglePin(album.id, album.id !in state.pinnedAlbumIds) },
                         onToggleHidden = { onToggleHidden(album.id, album.id !in state.hiddenAlbumIds) },
@@ -295,6 +315,7 @@ private fun AlbumRow(
     onOpen: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
+    onMerge: () -> Unit,
     onShowMapping: () -> Unit,
     onTogglePin: () -> Unit,
     onToggleHidden: () -> Unit,
@@ -359,6 +380,13 @@ private fun AlbumRow(
                         onClick = {
                             menuExpanded = false
                             onRename()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("合并到…") },
+                        onClick = {
+                            menuExpanded = false
+                            onMerge()
                         },
                     )
                     DropdownMenuItem(
@@ -604,6 +632,60 @@ private fun RenameAlbumDialog(
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+@Composable
+private fun MergeAlbumDialog(
+    album: AlbumEntity,
+    albums: List<AlbumEntity>,
+    count: Int,
+    onConfirm: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val targetAlbums = albums.filter { it.id != album.id }.sortedBy { it.name }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("合并「${album.name}」") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "会把 $count 条 App 内归类记录合并到目标相册，然后删除「${album.name}」。不会移动或删除系统照片文件。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (targetAlbums.isEmpty()) {
+                    Text(
+                        "还没有其它相册可合并。请先新建一个目标相册。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.height(220.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        items(targetAlbums, key = { it.id }) { target ->
+                            TextButton(
+                                onClick = { onConfirm(target.id) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    "合并到「${target.name}」",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
     )
 }
 
