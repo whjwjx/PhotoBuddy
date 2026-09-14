@@ -22,6 +22,12 @@ data class OrganizeSettings(
     val dailyGoal: Int = 20,
     /** 是否开启每日整理提醒。 */
     val reminderEnabled: Boolean = false,
+    /** 整理提醒最小间隔天数。 */
+    val reminderIntervalDays: Int = 1,
+    /** 静默开始小时（0-23）。 */
+    val quietStartHour: Int = 22,
+    /** 静默结束小时（0-23）。 */
+    val quietEndHour: Int = 8,
 )
 
 /** 每日整理任务进度（PRD 4.1 / 阶段 4）。 */
@@ -43,6 +49,10 @@ class SettingsRepository(
         val PINNED_ALBUM_IDS = stringPreferencesKey("pinned_album_ids")
         val HIDDEN_ALBUM_IDS = stringPreferencesKey("hidden_album_ids")
         val REMINDER_ENABLED = booleanPreferencesKey("reminder_enabled")
+        val REMINDER_INTERVAL_DAYS = intPreferencesKey("reminder_interval_days")
+        val QUIET_START_HOUR = intPreferencesKey("quiet_start_hour")
+        val QUIET_END_HOUR = intPreferencesKey("quiet_end_hour")
+        val LAST_REMINDER_DATE = stringPreferencesKey("last_reminder_date")
     }
 
     val settings: Flow<OrganizeSettings> =
@@ -50,6 +60,9 @@ class SettingsRepository(
             OrganizeSettings(
                 dailyGoal = p[Keys.DAILY_GOAL] ?: 20,
                 reminderEnabled = p[Keys.REMINDER_ENABLED] ?: false,
+                reminderIntervalDays = (p[Keys.REMINDER_INTERVAL_DAYS] ?: 1).coerceAtLeast(1),
+                quietStartHour = (p[Keys.QUIET_START_HOUR] ?: 22).coerceIn(0, 23),
+                quietEndHour = (p[Keys.QUIET_END_HOUR] ?: 8).coerceIn(0, 23),
             )
         }
 
@@ -75,6 +88,27 @@ class SettingsRepository(
 
     suspend fun setReminderEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.REMINDER_ENABLED] = enabled }
+    }
+
+    suspend fun setReminderIntervalDays(days: Int) {
+        context.settingsDataStore.edit { it[Keys.REMINDER_INTERVAL_DAYS] = days.coerceAtLeast(1) }
+    }
+
+    suspend fun setQuietHours(
+        startHour: Int,
+        endHour: Int,
+    ) {
+        context.settingsDataStore.edit { p ->
+            p[Keys.QUIET_START_HOUR] = startHour.coerceIn(0, 23)
+            p[Keys.QUIET_END_HOUR] = endHour.coerceIn(0, 23)
+        }
+    }
+
+    suspend fun getLastReminderDate(): String =
+        context.settingsDataStore.data.first()[Keys.LAST_REMINDER_DATE].orEmpty()
+
+    suspend fun markReminderPosted() {
+        context.settingsDataStore.edit { it[Keys.LAST_REMINDER_DATE] = today() }
     }
 
     suspend fun setAlbumPinned(

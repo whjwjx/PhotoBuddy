@@ -9,14 +9,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Switch
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -38,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -52,6 +54,8 @@ fun SettingsScreen() {
     val s = state.settings
     val isDebuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     var notificationGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
+    val shouldRequestNotificationPermission =
+        !notificationGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
     val notificationLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             notificationGranted = granted
@@ -60,6 +64,12 @@ fun SettingsScreen() {
 
     var goalText by remember { mutableStateOf(s.dailyGoal.toString()) }
     LaunchedEffect(s.dailyGoal) { goalText = s.dailyGoal.toString() }
+    var reminderIntervalText by remember { mutableStateOf(s.reminderIntervalDays.toString()) }
+    var quietStartText by remember { mutableStateOf(s.quietStartHour.toString()) }
+    var quietEndText by remember { mutableStateOf(s.quietEndHour.toString()) }
+    LaunchedEffect(s.reminderIntervalDays) { reminderIntervalText = s.reminderIntervalDays.toString() }
+    LaunchedEffect(s.quietStartHour) { quietStartText = s.quietStartHour.toString() }
+    LaunchedEffect(s.quietEndHour) { quietEndText = s.quietEndHour.toString() }
     var showResetConfirm by remember { mutableStateOf(false) }
 
     Scaffold(topBar = { TopAppBar(title = { Text("设置") }) }) { padding ->
@@ -105,7 +115,7 @@ fun SettingsScreen() {
                         Text("每日轻提醒", style = MaterialTheme.typography.titleSmall)
                         Text(
                             if (s.reminderEnabled) {
-                                "已开启，点通知会回到整理首页。"
+                                "每 ${s.reminderIntervalDays} 天最多一次，静默 ${s.quietStartHour}:00-${s.quietEndHour}:00。"
                             } else {
                                 "关闭后只保留首页今日进度。"
                             },
@@ -116,13 +126,60 @@ fun SettingsScreen() {
                     Switch(
                         checked = s.reminderEnabled,
                         onCheckedChange = { enabled ->
-                            if (enabled && !notificationGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            if (enabled && shouldRequestNotificationPermission) {
                                 notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                             } else {
                                 vm.setReminderEnabled(enabled)
                             }
                         },
                     )
+                }
+                if (s.reminderEnabled) {
+                    OutlinedTextField(
+                        value = reminderIntervalText,
+                        onValueChange = { text ->
+                            val next = text.filter { it.isDigit() }.take(2)
+                            reminderIntervalText = next
+                            next.toIntOrNull()?.let { vm.setReminderIntervalDays(it.coerceIn(1, 30)) }
+                        },
+                        label = { Text("提醒间隔（天）") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = quietStartText,
+                            onValueChange = { text ->
+                                val next = text.filter { it.isDigit() }.take(2)
+                                quietStartText = next
+                                next.toIntOrNull()?.let { hour ->
+                                    vm.setQuietHours(hour.coerceIn(0, 23), s.quietEndHour)
+                                }
+                            },
+                            label = { Text("静默开始") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            value = quietEndText,
+                            onValueChange = { text ->
+                                val next = text.filter { it.isDigit() }.take(2)
+                                quietEndText = next
+                                next.toIntOrNull()?.let { hour ->
+                                    vm.setQuietHours(s.quietStartHour, hour.coerceIn(0, 23))
+                                }
+                            },
+                            label = { Text("静默结束") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
                 if (s.reminderEnabled && !notificationGranted) {
                     Text(

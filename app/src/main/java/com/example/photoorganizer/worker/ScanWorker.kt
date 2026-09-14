@@ -19,12 +19,15 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.example.photoorganizer.MainActivity
 import com.example.photoorganizer.data.MediaLibraryRepository
 import com.example.photoorganizer.data.MediaStoreRepository
 import com.example.photoorganizer.data.SettingsRepository
 import com.example.photoorganizer.data.local.AppDatabase
-import com.example.photoorganizer.MainActivity
 import kotlinx.coroutines.flow.first
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /**
@@ -57,6 +60,8 @@ class ScanWorker(
         val settingsRepo = SettingsRepository(applicationContext)
         val settings = settingsRepo.settings.first()
         if (!settings.reminderEnabled || settings.dailyGoal <= 0) return
+        if (isQuietHour(settings.quietStartHour, settings.quietEndHour)) return
+        if (!isReminderIntervalDue(settingsRepo.getLastReminderDate(), settings.reminderIntervalDays)) return
         val daily = settingsRepo.daily.first()
         if (daily.count >= settings.dailyGoal) return
 
@@ -86,6 +91,33 @@ class ScanWorker(
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .build()
         NotificationManagerCompat.from(applicationContext).notify(DAILY_REMINDER_ID, notification)
+        settingsRepo.markReminderPosted()
+    }
+
+    private fun isQuietHour(
+        startHour: Int,
+        endHour: Int,
+    ): Boolean {
+        if (startHour == endHour) return false
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        return if (startHour < endHour) {
+            hour in startHour until endHour
+        } else {
+            hour >= startHour || hour < endHour
+        }
+    }
+
+    private fun isReminderIntervalDue(
+        lastDate: String,
+        intervalDays: Int,
+    ): Boolean {
+        if (lastDate.isBlank()) return true
+        val format = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val last = runCatching { format.parse(lastDate)?.time }.getOrNull() ?: return true
+        val currentDate = format.format(Calendar.getInstance().time)
+        val today = runCatching { format.parse(currentDate)?.time }.getOrNull() ?: return true
+        val elapsedDays = ((today - last) / TimeUnit.DAYS.toMillis(1)).coerceAtLeast(0)
+        return elapsedDays >= intervalDays
     }
 
     private fun canPostNotifications(): Boolean =

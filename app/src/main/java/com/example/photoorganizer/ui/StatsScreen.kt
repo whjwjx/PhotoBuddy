@@ -118,7 +118,13 @@ fun StatsScreen(
                     icon = Icons.Default.Notifications,
                     label = "提醒",
                     value = if (state.settings.reminderEnabled) "已开启" else "未开启",
-                    helper = "温和每日维护",
+                    helper =
+                        if (state.settings.reminderEnabled) {
+                            "${state.settings.reminderIntervalDays} 天 · ${state.settings.quietStartHour}:00-" +
+                                "${state.settings.quietEndHour}:00 静默"
+                        } else {
+                            "温和每日维护"
+                        },
                     modifier = Modifier.weight(1f),
                 )
             }

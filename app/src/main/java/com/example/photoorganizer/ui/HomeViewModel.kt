@@ -630,6 +630,17 @@ class HomeViewModel(
         }
     }
 
+    fun setReminderIntervalDays(days: Int) {
+        viewModelScope.launch { settingsRepo.setReminderIntervalDays(days) }
+    }
+
+    fun setQuietHours(
+        startHour: Int,
+        endHour: Int,
+    ) {
+        viewModelScope.launch { settingsRepo.setQuietHours(startHour, endHour) }
+    }
+
     /** 测试入口：只重置 App 内状态，不会恢复已经被系统删除或移入回收站的真实文件。 */
     fun resetForTesting() {
         viewModelScope.launch {
