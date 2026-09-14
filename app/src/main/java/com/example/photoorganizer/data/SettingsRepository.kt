@@ -37,6 +37,7 @@ class SettingsRepository(
         val LAST_SCAN_MS = longPreferencesKey("last_scan_ms")
         val DAILY_DATE = stringPreferencesKey("daily_date")
         val DAILY_COUNT = intPreferencesKey("daily_count")
+        val PINNED_ALBUM_IDS = stringPreferencesKey("pinned_album_ids")
     }
 
     val settings: Flow<OrganizeSettings> =
@@ -56,8 +57,22 @@ class SettingsRepository(
             }
         }
 
+    val pinnedAlbumIds: Flow<Set<Long>> =
+        context.settingsDataStore.data.map { p -> parseIdSet(p[Keys.PINNED_ALBUM_IDS].orEmpty()) }
+
     suspend fun setDailyGoal(v: Int) {
         context.settingsDataStore.edit { it[Keys.DAILY_GOAL] = v }
+    }
+
+    suspend fun setAlbumPinned(
+        albumId: Long,
+        pinned: Boolean,
+    ) {
+        context.settingsDataStore.edit { p ->
+            val current = parseIdSet(p[Keys.PINNED_ALBUM_IDS].orEmpty())
+            val next = if (pinned) current + albumId else current - albumId
+            p[Keys.PINNED_ALBUM_IDS] = next.sorted().joinToString(",")
+        }
     }
 
     suspend fun getLastScanMs(): Long = context.settingsDataStore.data.first()[Keys.LAST_SCAN_MS] ?: 0L
@@ -84,4 +99,10 @@ class SettingsRepository(
     }
 
     private fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+    private fun parseIdSet(raw: String): Set<Long> =
+        raw
+            .split(",")
+            .mapNotNull { it.trim().toLongOrNull() }
+            .toSet()
 }

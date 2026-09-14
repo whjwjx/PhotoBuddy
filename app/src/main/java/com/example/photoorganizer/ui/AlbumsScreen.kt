@@ -115,6 +115,7 @@ fun AlbumsScreen() {
                 onOpen = { vm.openAlbum(it) },
                 onRename = { renameTarget = it },
                 onDelete = { deleteTarget = it },
+                onTogglePin = { albumId, pinned -> vm.setAlbumPinned(albumId, pinned) },
                 modifier = Modifier.padding(padding),
             )
         } else {
@@ -172,6 +173,7 @@ private fun AlbumList(
     onOpen: (Long) -> Unit,
     onRename: (AlbumEntity) -> Unit,
     onDelete: (AlbumEntity) -> Unit,
+    onTogglePin: (Long, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -185,7 +187,7 @@ private fun AlbumList(
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("App 内标签", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "这些相册用于整理流快速归类，不会移动系统相册里的文件；整理页会优先显示最近使用的标签。",
+                    "这些相册用于整理流快速归类，不会移动系统相册里的文件；置顶和最近使用会影响整理页快捷区。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -225,6 +227,7 @@ private fun AlbumList(
                     albums = state.albums,
                     counts = state.albumCounts,
                     lastAddedAt = state.albumLastAddedAt,
+                    pinnedAlbumIds = state.pinnedAlbumIds,
                 )
             }
         val visibleAlbums =
@@ -247,9 +250,11 @@ private fun AlbumList(
                         cover = cover,
                         count = state.albumCounts[album.id] ?: 0,
                         lastAddedAt = state.albumLastAddedAt[album.id] ?: 0L,
+                        pinned = album.id in state.pinnedAlbumIds,
                         onOpen = { onOpen(album.id) },
                         onRename = { onRename(album) },
                         onDelete = { onDelete(album) },
+                        onTogglePin = { onTogglePin(album.id, album.id !in state.pinnedAlbumIds) },
                     )
                 }
             }
@@ -263,9 +268,11 @@ private fun AlbumRow(
     cover: MediaAsset?,
     count: Int,
     lastAddedAt: Long,
+    pinned: Boolean,
     onOpen: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
+    onTogglePin: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
@@ -279,7 +286,14 @@ private fun AlbumRow(
             AlbumCover(cover = cover, modifier = Modifier.size(72.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(album.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("$count 项 · App 内标签", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    buildString {
+                        append("$count 项")
+                        if (pinned) append(" · 已置顶")
+                        append(" · App 内标签")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
                 Text(
                     if (lastAddedAt > 0) "最近添加 ${formatDate(lastAddedAt)}" else "暂无内容",
                     style = MaterialTheme.typography.bodySmall,
@@ -287,6 +301,9 @@ private fun AlbumRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+            TextButton(onClick = onTogglePin) {
+                Text(if (pinned) "取消置顶" else "置顶")
             }
             IconButton(onClick = onRename) {
                 Icon(Icons.Default.Edit, contentDescription = "重命名")
@@ -464,9 +481,11 @@ private fun sortAlbumsForManagement(
     albums: List<AlbumEntity>,
     counts: Map<Long, Int>,
     lastAddedAt: Map<Long, Long>,
+    pinnedAlbumIds: Set<Long>,
 ): List<AlbumEntity> =
     albums.sortedWith(
-        compareByDescending<AlbumEntity> { lastAddedAt[it.id] ?: 0L }
+        compareByDescending<AlbumEntity> { if (it.id in pinnedAlbumIds) 1 else 0 }
+            .thenByDescending { lastAddedAt[it.id] ?: 0L }
             .thenByDescending { counts[it.id] ?: 0 }
             .thenByDescending { it.createdAt }
             .thenBy { it.name },
