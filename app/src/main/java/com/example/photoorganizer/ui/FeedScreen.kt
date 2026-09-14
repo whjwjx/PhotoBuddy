@@ -119,9 +119,7 @@ fun FeedScreen(
                 title = state.queueType.label + if (state.queueTitle.isNotEmpty()) " · ${state.queueTitle}" else "",
                 remaining = state.remaining,
                 trashCount = state.trashCount,
-                canUndo = state.undo != null,
                 onExit = onExit,
-                onUndo = { vm.undoLast() },
                 onOpenTrash = onOpenTrash,
                 onQueue = { showQueue = true },
             )
@@ -158,6 +156,7 @@ fun FeedScreen(
 
             UndoBanner(
                 visible = state.undo != null,
+                message = state.undo?.message.orEmpty(),
                 onUndo = { vm.undoLast() },
                 modifier =
                     Modifier
@@ -300,9 +299,7 @@ private fun TopBar(
     title: String,
     remaining: Int,
     trashCount: Int,
-    canUndo: Boolean,
     onExit: () -> Unit,
-    onUndo: () -> Unit,
     onOpenTrash: () -> Unit,
     onQueue: () -> Unit,
 ) {
@@ -324,7 +321,6 @@ private fun TopBar(
             )
             Text("剩余 $remaining", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall)
         }
-        TextButton(onClick = onUndo, enabled = canUndo) { Text("撤销", color = Color.White) }
         TextButton(onClick = onOpenTrash) { Text("待删 $trashCount", color = Color.White) }
         IconButton(onClick = onQueue) {
             Icon(Icons.Default.MoreHoriz, contentDescription = "队列", tint = Color.White)
@@ -335,6 +331,7 @@ private fun TopBar(
 @Composable
 private fun UndoBanner(
     visible: Boolean,
+    message: String,
     onUndo: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -348,7 +345,7 @@ private fun UndoBanner(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "已处理当前照片",
+            message.ifBlank { "已完成" },
             color = Color.White,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
@@ -361,9 +358,9 @@ private fun UndoBanner(
 
 @Composable
 private fun GestureHints(modifier: Modifier = Modifier) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(160.dp)) {
-        Text("下拉收藏", color = Color.White.copy(alpha = 0.45f), style = MaterialTheme.typography.labelMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(120.dp)) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(120.dp)) {
+        Text("下滑收藏", color = Color.White.copy(alpha = 0.45f), style = MaterialTheme.typography.labelMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(96.dp)) {
             Text("稍后", color = Color.White.copy(alpha = 0.4f), style = MaterialTheme.typography.labelMedium)
             Text("保留", color = Color.White.copy(alpha = 0.4f), style = MaterialTheme.typography.labelMedium)
         }
@@ -483,9 +480,10 @@ private fun AlbumPickerSheet(
 ) {
     var query by remember { mutableStateOf("") }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val trimmedQuery = query.trim()
     val filtered =
         albums.filter {
-            query.isBlank() || it.name.contains(query.trim(), ignoreCase = true)
+            query.isBlank() || it.name.contains(trimmedQuery, ignoreCase = true)
         }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -507,11 +505,17 @@ private fun AlbumPickerSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
             Button(
-                onClick = { onCreateAndPick(query) },
-                enabled = query.trim().isNotEmpty(),
+                onClick = { onCreateAndPick(trimmedQuery) },
+                enabled = trimmedQuery.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("新建并加入「${query.trim().ifEmpty { "相册" }}」")
+                Text(
+                    if (trimmedQuery.isEmpty()) {
+                        "输入名称后新建相册"
+                    } else {
+                        "新建并加入「$trimmedQuery」"
+                    },
+                )
             }
             Text("已有相册", style = MaterialTheme.typography.labelLarge)
             if (filtered.isEmpty()) {

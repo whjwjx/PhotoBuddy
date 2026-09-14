@@ -41,6 +41,7 @@ data class UndoState(
     val mediaName: String,
     val mediaType: String,
     val beforeStatus: String?,
+    val message: String,
 )
 
 data class HomeUiState(
@@ -272,7 +273,7 @@ class HomeViewModel(
     fun act(status: MediaStatus) {
         val nextStatus = if (status == MediaStatus.DELETE) MediaStatus.TRASH else status
         val asset = _uiState.value.current ?: return
-        viewModelScope.launch { finishAction(asset, nextStatus) }
+        viewModelScope.launch { finishAction(asset, nextStatus, actionMessage(nextStatus)) }
     }
 
     /**
@@ -405,18 +406,19 @@ class HomeViewModel(
             albumDao.addItem(
                 AlbumItemEntity(albumId = albumId, mediaId = asset.id, addedAt = System.currentTimeMillis()),
             )
-            finishAction(asset, MediaStatus.KEEP)
+            finishAction(asset, MediaStatus.KEEP, "已新建并加入「$trimmed」")
         }
     }
 
     /** 把当前卡片加入相册。刷卡流只做 App 内归类，避免系统写入弹窗打断连续整理。 */
     fun addCurrentToAlbum(albumId: Long) {
         val asset = _uiState.value.current ?: return
+        val albumName = _uiState.value.albums.firstOrNull { it.id == albumId }?.name ?: "相册"
         viewModelScope.launch {
             albumDao.addItem(
                 AlbumItemEntity(albumId = albumId, mediaId = asset.id, addedAt = System.currentTimeMillis()),
             )
-            finishAction(asset, MediaStatus.KEEP)
+            finishAction(asset, MediaStatus.KEEP, "已加入「$albumName」")
         }
     }
 
@@ -647,6 +649,7 @@ class HomeViewModel(
     private suspend fun finishAction(
         asset: MediaAsset,
         status: MediaStatus,
+        message: String = actionMessage(status),
     ) {
         val before = dao.get(asset.id)?.status.orEmpty()
         val source = _uiState.value.queueSource
@@ -675,11 +678,22 @@ class HomeViewModel(
                         mediaName = asset.displayName,
                         mediaType = asset.mediaType.name,
                         beforeStatus = before.ifEmpty { null },
+                        message = message,
                     ),
                 ),
             )
         }
     }
+
+    private fun actionMessage(status: MediaStatus): String =
+        when (status) {
+            MediaStatus.TRASH -> "已加入待删除"
+            MediaStatus.KEEP -> "已保留"
+            MediaStatus.LATER -> "已标记稍后"
+            MediaStatus.FAVORITE -> "已收藏"
+            MediaStatus.DELETE -> "已删除"
+            MediaStatus.PERMANENT -> "已永久保留"
+        }
 
     private suspend fun finishTrashDelete(ids: Set<Long>) {
         val byId = _uiState.value.allAssets.associateBy { it.id }

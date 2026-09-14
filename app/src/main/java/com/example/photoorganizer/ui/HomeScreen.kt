@@ -114,7 +114,7 @@ fun HomeScreen(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        "一次只看一张。上滑加入待删除，下拉收藏，左右滑保留或稍后。",
+                        "一次只看一张。上滑待删除，下滑收藏，左右滑保留或稍后。",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Button(
@@ -261,7 +261,7 @@ private fun TrashEntry(
                 Icon(Icons.Default.DeleteOutline, contentDescription = null)
             }
             Column(Modifier.weight(1f)) {
-                Text("待删除 Review", style = MaterialTheme.typography.titleMedium)
+                Text("待删除复核", style = MaterialTheme.typography.titleMedium)
                 Text(
                     if (count > 0) {
                         "$count 项 · 预计释放 ${formatBytes(bytes)}"
@@ -271,7 +271,7 @@ private fun TrashEntry(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            Text(if (count > 0) "检查" else "空", style = MaterialTheme.typography.labelLarge)
+            Text(if (count > 0) "检查" else "暂无", style = MaterialTheme.typography.labelLarge)
         }
     }
 }

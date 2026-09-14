@@ -77,7 +77,7 @@ fun TrashScreen(onExit: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("待删除") },
+                title = { Text("待删除复核") },
                 navigationIcon = {
                     TextButton(onClick = onExit) { Text("返回") }
                 },
@@ -141,7 +141,7 @@ fun TrashScreen(onExit: () -> Unit) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("${items.size} 项等待确认", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "这里还没有真正删除。确认后会优先移入系统最近删除；系统不支持时才会使用永久删除请求。",
+                            "确认前不会删除。支持系统回收站时，会先移入最近删除。",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -223,7 +223,7 @@ private fun EmptyTrash(modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "在整理页上滑照片后，它们会先出现在这里，确认后才会交给系统删除。",
+            "整理页上滑的照片会先放在这里，确认后才交给系统删除。",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
         )

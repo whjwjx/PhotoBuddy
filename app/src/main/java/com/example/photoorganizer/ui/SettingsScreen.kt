@@ -145,9 +145,9 @@ fun SettingsScreen() {
             Spacer(Modifier.height(8.dp))
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp)) {
-                    Text("一键还原测试状态")
+                    Text("重置 App 内测试状态")
                     Text(
-                        "清空 App 内整理状态、待删除、相册归类、操作记录和今日计数；不会恢复已经被系统删除的真实照片。",
+                        "清空整理状态、待删除、相册归类、操作记录和今日计数；不影响系统相册文件。",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Spacer(Modifier.height(12.dp))
@@ -165,8 +165,8 @@ fun SettingsScreen() {
             title = { Text("还原测试状态？") },
             text = {
                 Text(
-                    "这会让照片重新回到未整理队列，并清空待删除和测试记录。" +
-                        "它只影响本 App 数据，不会恢复已经通过系统确认删除的文件。",
+                    "这会让照片重新回到未整理队列，并清空 App 内待删除、相册归类和测试记录。" +
+                        "已经通过系统确认删除的文件不会恢复。",
                 )
             },
             confirmButton = {
