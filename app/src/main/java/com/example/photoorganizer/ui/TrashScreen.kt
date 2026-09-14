@@ -5,8 +5,11 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -21,14 +25,17 @@ import androidx.compose.foundation.lazy.items as lazyItems
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -94,6 +102,8 @@ fun TrashScreen(onExit: () -> Unit) {
     val visibleIds = remember(visibleItems) { visibleItems.map { it.id }.toSet() }
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     var pendingDeleteIds by remember { mutableStateOf(emptySet<Long>()) }
+    val allVisibleSelected = visibleItems.isNotEmpty() && visibleIds.all { it in selectedIds }
+    val selectedBytes = visibleItems.sumSelectedBytes(selectedIds)
 
     LaunchedEffect(visibleIds) {
         selectedIds = visibleIds
@@ -121,10 +131,10 @@ fun TrashScreen(onExit: () -> Unit) {
                         TextButton(
                             onClick = {
                                 selectedIds =
-                                    if (visibleIds.all { it in selectedIds }) emptySet() else visibleIds
+                                    if (allVisibleSelected) emptySet() else visibleIds
                             },
                         ) {
-                            Text(if (visibleIds.all { it in selectedIds }) "全不选" else "全选")
+                            Text(if (allVisibleSelected) "全不选" else "全选")
                         }
                     }
                 },
@@ -132,35 +142,15 @@ fun TrashScreen(onExit: () -> Unit) {
         },
         bottomBar = {
             if (visibleItems.isNotEmpty()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "已选 ${selectedIds.size} 项 · 预计释放 ${formatBytes(visibleItems.sumSelectedBytes(selectedIds))}",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedButton(
-                            onClick = {
-                                vm.restoreFromTrash(selectedIds)
-                                selectedIds = emptySet()
-                            },
-                            enabled = selectedIds.isNotEmpty(),
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.size(6.dp))
-                            Text("恢复")
-                        }
-                        Button(
-                            onClick = { pendingDeleteIds = selectedIds },
-                            enabled = selectedIds.isNotEmpty(),
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.size(6.dp))
-                            Text("确认删除")
-                        }
-                    }
-                }
+                TrashActionBar(
+                    selectedCount = selectedIds.size,
+                    selectedBytes = selectedBytes,
+                    onRestore = {
+                        vm.restoreFromTrash(selectedIds)
+                        selectedIds = emptySet()
+                    },
+                    onDelete = { pendingDeleteIds = selectedIds },
+                )
             }
         },
     ) { padding ->
@@ -174,7 +164,7 @@ fun TrashScreen(onExit: () -> Unit) {
                     .padding(horizontal = 12.dp),
             ) {
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
-                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             if (sourceFilter == null) {
                                 "${items.size} 项等待确认"
@@ -184,9 +174,16 @@ fun TrashScreen(onExit: () -> Unit) {
                             style = MaterialTheme.typography.titleMedium,
                         )
                         Text(
+                            "确认前不会删除。选中的项目会在这里统一复核。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
                             deletePolicyText(),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -320,22 +317,109 @@ private fun SourceFilterRow(
 }
 
 @Composable
+private fun TrashActionBar(
+    selectedCount: Int,
+    selectedBytes: Long,
+    onRestore: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Card(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(34.dp)
+                            .background(MaterialTheme.colorScheme.errorContainer, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Default.DeleteForever,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text(
+                        if (selectedCount > 0) "已选 $selectedCount 项" else "未选择照片",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        if (selectedCount > 0) {
+                            "预计释放 ${formatBytes(selectedBytes)}"
+                        } else {
+                            "选择后可恢复或移入最近删除"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = onRestore,
+                    enabled = selectedCount > 0,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.size(6.dp))
+                    Text("恢复")
+                }
+                Button(
+                    onClick = onDelete,
+                    enabled = selectedCount > 0,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.size(6.dp))
+                    Text(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "移入最近删除" else "删除")
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun TrashTile(
     asset: MediaAsset,
     selected: Boolean,
     onOpen: () -> Unit,
     onToggle: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(8.dp)
     Card(
-        modifier = Modifier.clickable(onClick = onOpen),
-        shape = RoundedCornerShape(8.dp),
+        modifier =
+            Modifier
+                .clickable(onClick = onOpen)
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color =
+                        if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                        },
+                    shape = shape,
+                ),
+        shape = shape,
     ) {
-        Box {
-            Column {
+        Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.82f)) {
+            Column(Modifier.fillMaxSize()) {
                 AsyncImage(
                     model = asset.uri,
                     contentDescription = asset.displayName,
-                    modifier = Modifier.fillMaxWidth().height(112.dp),
+                    modifier = Modifier.fillMaxWidth().weight(1f),
                     contentScale = ContentScale.Crop,
                 )
                 Text(
@@ -346,12 +430,43 @@ private fun TrashTile(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            Checkbox(
-                checked = selected,
-                onCheckedChange = { onToggle() },
-                modifier = Modifier.align(Alignment.TopEnd),
+            if (selected) {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)))
+            }
+            SelectionBadge(
+                selected = selected,
+                onClick = onToggle,
+                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun SelectionBadge(
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .size(28.dp)
+                .background(Color.White.copy(alpha = 0.92f), CircleShape)
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (selected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+            contentDescription = if (selected) "取消选择" else "选择",
+            tint =
+                if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            modifier = Modifier.size(22.dp),
+        )
     }
 }
 

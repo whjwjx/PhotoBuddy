@@ -395,6 +395,7 @@ class HomeViewModel(
                     )
                 }
             }
+            settingsRepo.addProcessed(-ids.size)
             _uiState.update { s -> recompute(s.copy(undo = null)) }
         }
     }
