@@ -16,6 +16,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -25,6 +26,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.photoorganizer.data.MediaType
+import com.example.photoorganizer.domain.MediaQueue
 
 @Composable
 internal fun FilterChipButton(
@@ -58,9 +61,9 @@ internal fun FilterChipButton(
 @Composable
 internal fun QueueFilterSheet(
     state: HomeUiState,
-    onFilterType: (com.example.photoorganizer.data.MediaType?) -> Unit,
+    onFilterType: (MediaType?) -> Unit,
     onFilterBucket: (String?) -> Unit,
-    onSelectQueue: (com.example.photoorganizer.domain.MediaQueue) -> Unit,
+    onSelectQueue: (MediaQueue) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -79,11 +82,14 @@ internal fun QueueFilterSheet(
             .sortedWith(compareByDescending<BucketFilterOption> { it.count }.thenBy { it.name })
     val sortedQueues =
         state.queues.sortedWith(
-            compareByDescending<com.example.photoorganizer.domain.MediaQueue> { it.items.isNotEmpty() }
+            compareByDescending<MediaQueue> { it.items.isNotEmpty() }
                 .thenBy { if (it.type == state.queueType && it.title == state.queueTitle) 0 else 1 }
                 .thenByDescending { it.items.size }
                 .thenBy { it.displayName },
         )
+    val currentTotal = state.queueItems.size
+    val currentDone = (currentTotal - state.remaining).coerceIn(0, currentTotal)
+    val currentProgress = if (currentTotal == 0) 1f else currentDone.toFloat() / currentTotal
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -97,33 +103,39 @@ internal fun QueueFilterSheet(
         ) {
             Text("选择队列", style = MaterialTheme.typography.titleLarge)
             Text(
-                "切换短任务，不离开当前整理流。",
+                "切换短任务，当前整理进度会保留。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("当前", style = MaterialTheme.typography.labelSmall)
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("当前短队列", style = MaterialTheme.typography.labelSmall)
                     Text(state.queueSource, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "剩余 ${state.remaining} 项",
+                        "已整理 $currentDone / $currentTotal · 剩余 ${state.remaining} 项",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    LinearProgressIndicator(
+                        progress = { currentProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp),
+                    )
                 }
             }
-            Text("媒体类型", style = MaterialTheme.typography.labelLarge)
+            QueueSheetSectionTitle("媒体类型")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 FilterChipButton("全部", state.filterType == null) { onFilterType(null) }
-                FilterChipButton("图片", state.filterType == com.example.photoorganizer.data.MediaType.IMAGE) {
-                    onFilterType(com.example.photoorganizer.data.MediaType.IMAGE)
+                FilterChipButton("图片", state.filterType == MediaType.IMAGE) {
+                    onFilterType(MediaType.IMAGE)
                 }
-                FilterChipButton("视频", state.filterType == com.example.photoorganizer.data.MediaType.VIDEO) {
-                    onFilterType(com.example.photoorganizer.data.MediaType.VIDEO)
+                FilterChipButton("视频", state.filterType == MediaType.VIDEO) {
+                    onFilterType(MediaType.VIDEO)
                 }
             }
             if (bucketOptions.isNotEmpty()) {
-                Text("系统相册", style = MaterialTheme.typography.labelLarge)
+                QueueSheetSectionTitle("系统相册", "${bucketOptions.size} 个")
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     item {
                         FilterChipButton(
@@ -141,7 +153,7 @@ internal fun QueueFilterSheet(
                     }
                 }
             }
-            Text("推荐队列", style = MaterialTheme.typography.labelLarge)
+            QueueSheetSectionTitle("短队列", "${sortedQueues.count { it.items.isNotEmpty() }} 个可继续")
             LazyColumn(Modifier.height(360.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(sortedQueues) { q ->
                     val selected = q.type == state.queueType && q.title == state.queueTitle
@@ -161,17 +173,13 @@ internal fun QueueFilterSheet(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
-                                    if (q.items.isEmpty()) {
-                                        "暂无可整理内容"
-                                    } else {
-                                        "${q.items.size} 项 · ${formatBytes(q.estimatedSavingBytes)}"
-                                    },
+                                    queueRowMeta(q, selected),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             Text(
-                                if (selected) "当前" else if (q.items.isEmpty()) "完成" else "进入",
+                                if (selected) "当前" else if (q.items.isEmpty()) "完成" else "继续",
                                 style = MaterialTheme.typography.labelLarge,
                                 color =
                                     if (selected) {
@@ -193,3 +201,38 @@ private data class BucketFilterOption(
     val name: String,
     val count: Int,
 )
+
+@Composable
+private fun QueueSheetSectionTitle(
+    title: String,
+    count: String? = null,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = MaterialTheme.typography.labelLarge)
+        if (count != null) {
+            Text(
+                count,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private fun queueRowMeta(
+    queue: MediaQueue,
+    selected: Boolean,
+): String =
+    buildString {
+        if (queue.items.isEmpty()) {
+            append("暂无可整理内容")
+        } else {
+            append("${queue.items.size} 项")
+            if (queue.estimatedSavingBytes > 0L) {
+                append(" · 预计可释放 ${formatBytes(queue.estimatedSavingBytes)}")
+            }
+        }
+        if (selected) {
+            append(" · 正在整理")
+        }
+    }

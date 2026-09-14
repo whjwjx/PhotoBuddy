@@ -1239,6 +1239,17 @@ private fun EmptyQueue(
     onExit: () -> Unit,
     onQueue: () -> Unit,
 ) {
+    val supportingText =
+        if (nextQueue == null) {
+            "没有可继续的短队列。回首页复核待删除，或重新扫描后继续整理。"
+        } else {
+            "下一组建议「${nextQueue.displayName}」：${nextQueue.items.size} 项" +
+                if (nextQueue.estimatedSavingBytes > 0L) {
+                    " · 预计可释放 ${formatBytes(nextQueue.estimatedSavingBytes)}"
+                } else {
+                    ""
+                }
+        }
     Column(
         Modifier
             .fillMaxSize()
@@ -1255,22 +1266,18 @@ private fun EmptyQueue(
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            if (nextQueue == null) {
-                "所有可见队列都整理完了，可以回首页看看待删除。"
-            } else {
-                "可以继续处理「${nextQueue.displayName}」，让整理节奏不断掉。"
-            },
+            supportingText,
             color = Color.White.copy(alpha = 0.72f),
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(20.dp))
         if (nextQueue != null) {
             Button(onClick = onNextQueue) {
-                Text("继续 ${nextQueue.displayName} · ${nextQueue.items.size} 项")
+                Text("继续下一组")
             }
             Spacer(Modifier.height(8.dp))
         }
-        Button(onClick = onQueue) { Text("选择队列") }
+        Button(onClick = onQueue) { Text("查看短队列") }
         TextButton(onClick = onExit) { Text("回首页", color = Color.White) }
     }
 }
