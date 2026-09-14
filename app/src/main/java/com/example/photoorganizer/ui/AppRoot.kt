@@ -68,7 +68,7 @@ enum class AppTab(val label: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppRoot() {
+fun AppRoot(initialTab: AppTab = AppTab.HOME) {
     val context = LocalContext.current
     val permissions = remember { requiredPermissions() }
     var granted by remember {
@@ -90,7 +90,7 @@ fun AppRoot() {
         return
     }
 
-    var tab by remember { mutableStateOf(AppTab.HOME) }
+    var tab by remember { mutableStateOf(initialTab) }
     Scaffold(
         // 刷照片流是全屏沉浸式，隐藏底部导航
         bottomBar = {
