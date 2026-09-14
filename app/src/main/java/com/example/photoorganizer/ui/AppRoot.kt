@@ -73,15 +73,11 @@ fun AppRoot(initialTab: AppTab = AppTab.HOME) {
     val context = LocalContext.current
     val permissions = remember { requiredPermissions() }
     var granted by remember {
-        mutableStateOf(
-            permissions.all {
-                ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-            },
-        )
+        mutableStateOf(hasMediaAccess(context))
     }
     val launcher =
-        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-            granted = result.values.all { it }
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            granted = hasMediaAccess(context)
     }
 
     if (!granted) {
@@ -149,6 +145,11 @@ fun AppRoot(initialTab: AppTab = AppTab.HOME) {
 
 private fun requiredPermissions(): List<String> =
     when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> listOf(
+            Manifest.permission.READ_MEDIA_IMAGES,
+            Manifest.permission.READ_MEDIA_VIDEO,
+            Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
+        )
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> listOf(
             Manifest.permission.READ_MEDIA_IMAGES,
             Manifest.permission.READ_MEDIA_VIDEO,
@@ -159,6 +160,32 @@ private fun requiredPermissions(): List<String> =
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
         )
         else -> listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+
+private fun hasMediaAccess(context: android.content.Context): Boolean =
+    when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
+            val hasImages =
+                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) ==
+                    PackageManager.PERMISSION_GRANTED
+            val hasVideo =
+                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_VIDEO) ==
+                    PackageManager.PERMISSION_GRANTED
+            val hasPartial =
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
+                    ) == PackageManager.PERMISSION_GRANTED
+            hasImages || hasVideo || hasPartial
+        }
+        Build.VERSION.SDK_INT <= Build.VERSION_CODES.P ->
+            requiredPermissions().all {
+                ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+            }
+        else ->
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) ==
+                PackageManager.PERMISSION_GRANTED
     }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -4,6 +4,8 @@
     <!-- Android 13+ 分区媒体权限 -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!-- Android 14+ 部分照片访问；用于进入 App 后提示用户当前只看到部分媒体。 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <!-- Android 12L 及以下回退权限 -->
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
