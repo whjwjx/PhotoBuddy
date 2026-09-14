@@ -1,0 +1,11 @@
+# Gradle 包装脚本：shell 脚本必须 LF，Windows 批处理必须 CRLF
+# 否则在 Windows 上检出时 autocrlf 会把 gradlew 转成 CRLF，导致 Git Bash / WSL 下无法执行
+gradlew text eol=lf
+gradlew.bat text eol=crlf
+*.sh text eol=lf
+
+# 二进制文件，禁止做任何换行转换
+*.jar binary
+*.png binary
+*.jpg binary
+*.mp4 binary
