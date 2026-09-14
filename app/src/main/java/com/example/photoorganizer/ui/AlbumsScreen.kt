@@ -2,6 +2,8 @@ package com.example.photoorganizer.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoAlbum
 import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.Search
@@ -29,6 +32,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,6 +73,7 @@ fun AlbumsScreen() {
     var query by remember { mutableStateOf("") }
     var renameTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var deleteTarget by remember { mutableStateOf<AlbumEntity?>(null) }
+    var mappingTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     val openAlbum = state.albums.firstOrNull { it.id == state.openAlbumId }
     val openItems =
@@ -115,6 +121,7 @@ fun AlbumsScreen() {
                 onOpen = { vm.openAlbum(it) },
                 onRename = { renameTarget = it },
                 onDelete = { deleteTarget = it },
+                onShowMapping = { mappingTarget = it },
                 onTogglePin = { albumId, pinned -> vm.setAlbumPinned(albumId, pinned) },
                 modifier = Modifier.padding(padding),
             )
@@ -160,6 +167,13 @@ fun AlbumsScreen() {
             onDismiss = { deleteTarget = null },
         )
     }
+
+    mappingTarget?.let { album ->
+        AlbumMappingDialog(
+            album = album,
+            onDismiss = { mappingTarget = null },
+        )
+    }
 }
 
 @Composable
@@ -173,6 +187,7 @@ private fun AlbumList(
     onOpen: (Long) -> Unit,
     onRename: (AlbumEntity) -> Unit,
     onDelete: (AlbumEntity) -> Unit,
+    onShowMapping: (AlbumEntity) -> Unit,
     onTogglePin: (Long, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -254,6 +269,7 @@ private fun AlbumList(
                         onOpen = { onOpen(album.id) },
                         onRename = { onRename(album) },
                         onDelete = { onDelete(album) },
+                        onShowMapping = { onShowMapping(album) },
                         onTogglePin = { onTogglePin(album.id, album.id !in state.pinnedAlbumIds) },
                     )
                 }
@@ -262,6 +278,7 @@ private fun AlbumList(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AlbumRow(
     album: AlbumEntity,
@@ -272,10 +289,18 @@ private fun AlbumRow(
     onOpen: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
+    onShowMapping: () -> Unit,
     onTogglePin: () -> Unit,
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = onOpen,
+                    onLongClick = { menuExpanded = true },
+                ),
         shape = RoundedCornerShape(8.dp),
     ) {
         Row(
@@ -302,14 +327,40 @@ private fun AlbumRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            TextButton(onClick = onTogglePin) {
-                Text(if (pinned) "取消置顶" else "置顶")
-            }
-            IconButton(onClick = onRename) {
-                Icon(Icons.Default.Edit, contentDescription = "重命名")
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.DeleteOutline, contentDescription = "删除相册")
+            Box {
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "管理相册")
+                }
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text(if (pinned) "取消置顶" else "置顶到整理页") },
+                        onClick = {
+                            menuExpanded = false
+                            onTogglePin()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("重命名") },
+                        onClick = {
+                            menuExpanded = false
+                            onRename()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("映射说明") },
+                        onClick = {
+                            menuExpanded = false
+                            onShowMapping()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("删除相册") },
+                        onClick = {
+                            menuExpanded = false
+                            onDelete()
+                        },
+                    )
+                }
             }
         }
     }
@@ -536,6 +587,28 @@ private fun RenameAlbumDialog(
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+@Composable
+private fun AlbumMappingDialog(
+    album: AlbumEntity,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("相册映射说明") },
+        text = {
+            Text(
+                "「${album.name}」目前是 App 内标签。加入、移出或删除这个相册，只会改变本 App 的归类记录，" +
+                    "不会移动、复制或删除系统相册里的照片文件。置顶只影响整理页底部快捷区。",
+            )
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("知道了")
+            }
+        },
     )
 }
 
