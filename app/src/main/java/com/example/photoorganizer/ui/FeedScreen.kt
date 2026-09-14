@@ -948,7 +948,14 @@ private fun AlbumPickerSheet(
                 .padding(horizontal = 18.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("加入相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("加入相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    "App 内标签，不移动系统文件",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -956,21 +963,22 @@ private fun AlbumPickerSheet(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Button(
-                onClick = { onCreateAndPick(trimmedQuery) },
-                enabled = trimmedQuery.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
+            if (trimmedQuery.isNotEmpty()) {
+                Button(
+                    onClick = { onCreateAndPick(trimmedQuery) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("新建并加入「$trimmedQuery」")
+                }
+            } else {
                 Text(
-                    if (trimmedQuery.isEmpty()) {
-                        "输入名称后创建"
-                    } else {
-                        "新建并加入「$trimmedQuery」"
-                    },
+                    "输入名称可直接创建，点相册会立即归类当前照片。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             if (trimmedQuery.isBlank() && pinnedAlbums.isNotEmpty()) {
-                Text("置顶相册", style = MaterialTheme.typography.labelLarge)
+                AlbumSheetSectionTitle("置顶相册", pinnedAlbums.size)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(pinnedAlbums, key = { it.id }) { album ->
                         AlbumSheetChip(
@@ -983,7 +991,7 @@ private fun AlbumPickerSheet(
                 }
             }
             if (trimmedQuery.isBlank() && recentAlbums.isNotEmpty()) {
-                Text("最近使用", style = MaterialTheme.typography.labelLarge)
+                AlbumSheetSectionTitle("最近使用", recentAlbums.size)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(recentAlbums, key = { it.id }) { album ->
                         AlbumSheetChip(
@@ -995,7 +1003,10 @@ private fun AlbumPickerSheet(
                     }
                 }
             }
-            Text("全部相册", style = MaterialTheme.typography.labelLarge)
+            AlbumSheetSectionTitle(
+                title = if (trimmedQuery.isBlank()) "全部相册" else "搜索结果",
+                count = filtered.size,
+            )
             if (filtered.isEmpty()) {
                 Text(
                     if (albums.isEmpty()) {
@@ -1028,11 +1039,12 @@ private fun AlbumPickerSheet(
                             Column(Modifier.weight(1f)) {
                                 Text(album.name, style = MaterialTheme.typography.titleMedium)
                                 Text(
-                                    buildString {
-                                        append("$count 项 · App 内标签")
-                                        if (album.id in hiddenAlbumIds) append(" · 已隐藏于快捷区")
-                                        if (recent > 0L) append(" · 最近 ${formatDate(recent)}")
-                                    },
+                                    albumSheetMeta(
+                                        count = count,
+                                        recent = recent,
+                                        pinned = album.id in pinnedAlbumIds,
+                                        hidden = album.id in hiddenAlbumIds,
+                                    ),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -1046,6 +1058,21 @@ private fun AlbumPickerSheet(
             }
             Spacer(Modifier.height(12.dp))
         }
+    }
+}
+
+@Composable
+private fun AlbumSheetSectionTitle(
+    title: String,
+    count: Int,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = MaterialTheme.typography.labelLarge)
+        Text(
+            "$count",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -1064,6 +1091,20 @@ private fun sortedAlbumsForOrganize(
             .thenByDescending { it.createdAt }
             .thenBy { it.name },
     )
+
+private fun albumSheetMeta(
+    count: Int,
+    recent: Long,
+    pinned: Boolean,
+    hidden: Boolean,
+): String =
+    buildString {
+        append("$count 项")
+        if (pinned) append(" · 置顶")
+        if (hidden) append(" · 已隐藏")
+        if (recent > 0L) append(" · 最近 ${formatDate(recent)}")
+        append(" · App 内标签")
+    }
 
 private fun similarMeta(asset: MediaAsset): String =
     buildString {
