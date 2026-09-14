@@ -69,6 +69,18 @@ object QueueEngine {
         return out
     }
 
+    fun isSimilarGroupPeer(
+        a: MediaAsset,
+        b: MediaAsset,
+    ): Boolean =
+        a.mediaType == MediaType.IMAGE &&
+            b.mediaType == MediaType.IMAGE &&
+            a.width > 0 &&
+            a.height > 0 &&
+            b.width > 0 &&
+            b.height > 0 &&
+            SimilarBucket.from(a) == SimilarBucket.from(b)
+
     private fun queue(
         type: QueueType,
         title: String,

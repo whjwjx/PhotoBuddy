@@ -288,6 +288,42 @@ class HomeViewModel(
         act(MediaStatus.TRASH)
     }
 
+    fun deferCurrentSimilarGroup() {
+        val s = _uiState.value
+        val current = s.current ?: return
+        if (s.queueType != QueueType.SIMILAR) return
+        val targets = s.queueItems.filter { QueueEngine.isSimilarGroupPeer(current, it) }
+        if (targets.isEmpty()) return
+        viewModelScope.launch {
+            targets.forEach { asset ->
+                val before = dao.get(asset.id)?.status.orEmpty()
+                dao.upsert(toEntity(asset, MediaStatus.LATER))
+                logDao.insert(
+                    UserActionLogEntity(
+                        mediaId = asset.id,
+                        mediaName = asset.displayName,
+                        mediaType = asset.mediaType.name,
+                        action = MediaStatus.LATER.value,
+                        source = s.queueSource,
+                        beforeState = before,
+                        afterState = MediaStatus.LATER.value,
+                        freedBytes = 0L,
+                        createdAt = System.currentTimeMillis(),
+                    ),
+                )
+            }
+            settingsRepo.addProcessed(targets.size)
+            _uiState.update { state ->
+                recompute(
+                    state.copy(
+                        processedCount = state.processedCount + targets.size,
+                        undo = null,
+                    ),
+                )
+            }
+        }
+    }
+
     /** 待删除页发起真实删除：优先移入系统回收站，失败时才使用系统永久删除请求兜底。 */
     fun requestDeleteTrash(ids: Set<Long>) {
         val s = _uiState.value

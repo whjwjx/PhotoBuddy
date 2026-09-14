@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -84,6 +83,7 @@ import com.example.photoorganizer.data.MediaType
 import com.example.photoorganizer.data.local.AlbumEntity
 import com.example.photoorganizer.data.local.MediaStatus
 import com.example.photoorganizer.domain.MediaQueue
+import com.example.photoorganizer.domain.QueueEngine
 import com.example.photoorganizer.domain.QueueType
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -182,11 +182,18 @@ fun FeedScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (state.queueType == QueueType.SIMILAR && state.queueItems.size > 1) {
-                    SimilarComparisonStrip(
-                        items = state.queueItems,
-                        currentIndex = state.currentIndex,
-                        onPick = { vm.setIndex(it) },
-                    )
+                    val similarCandidates =
+                        remember(state.queueItems, state.current?.id) {
+                            similarCandidatesForCurrent(state.queueItems, state.current)
+                        }
+                    if (similarCandidates.size > 1) {
+                        SimilarComparisonStrip(
+                            candidates = similarCandidates,
+                            currentIndex = state.currentIndex,
+                            onPick = { vm.setIndex(it) },
+                            onLaterAll = { vm.deferCurrentSimilarGroup() },
+                        )
+                    }
                 }
                 AssetCaption(asset = asset)
                 ActionBar(
@@ -417,13 +424,20 @@ private fun FeedPage(
     }
 }
 
+private data class SimilarCandidate(
+    val index: Int,
+    val asset: MediaAsset,
+)
+
 @Composable
 private fun SimilarComparisonStrip(
-    items: List<MediaAsset>,
+    candidates: List<SimilarCandidate>,
     currentIndex: Int,
     onPick: (Int) -> Unit,
+    onLaterAll: () -> Unit,
 ) {
-    val current = items.getOrNull(currentIndex)
+    val selectedPosition = candidates.indexOfFirst { it.index == currentIndex }.takeIf { it >= 0 } ?: 0
+    val current = candidates.getOrNull(selectedPosition)?.asset
     Column(
         Modifier
             .fillMaxWidth()
@@ -434,7 +448,7 @@ private fun SimilarComparisonStrip(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    "相似组 ${currentIndex + 1}/${items.size}",
+                    "相似组 ${selectedPosition + 1}/${candidates.size}",
                     color = Color.White,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
@@ -456,10 +470,14 @@ private fun SimilarComparisonStrip(
                     )
                 }
             }
+            TextButton(onClick = onLaterAll) {
+                Text("全部稍后", color = Color.White)
+            }
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
-                val selected = index == currentIndex
+            items(candidates, key = { it.asset.id }) { candidate ->
+                val item = candidate.asset
+                val selected = candidate.index == currentIndex
                 Box(
                     modifier =
                         Modifier
@@ -471,7 +489,7 @@ private fun SimilarComparisonStrip(
                                 color = if (selected) Color.White else Color.White.copy(alpha = 0.28f),
                                 shape = RoundedCornerShape(8.dp),
                             )
-                            .clickable { onPick(index) }
+                            .clickable { onPick(candidate.index) }
                             .padding(2.dp),
                 ) {
                     AsyncImage(
@@ -484,6 +502,16 @@ private fun SimilarComparisonStrip(
             }
         }
     }
+}
+
+private fun similarCandidatesForCurrent(
+    items: List<MediaAsset>,
+    current: MediaAsset?,
+): List<SimilarCandidate> {
+    if (current == null) return emptyList()
+    return items
+        .mapIndexed { index, asset -> SimilarCandidate(index, asset) }
+        .filter { QueueEngine.isSimilarGroupPeer(current, it.asset) }
 }
 
 @Composable
