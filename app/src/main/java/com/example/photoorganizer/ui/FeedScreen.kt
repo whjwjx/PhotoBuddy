@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Pause
@@ -651,11 +652,15 @@ private fun TopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        FeedTopPill(text = "关闭", onClick = onExit)
+        FeedTopIconButton(
+            icon = Icons.Default.Close,
+            contentDescription = "关闭整理",
+            onClick = onExit,
+        )
         Column(
             Modifier
                 .weight(1f)
-                .background(Color.Black.copy(alpha = 0.42f), RoundedCornerShape(8.dp))
+                .background(Color.Black.copy(alpha = 0.34f), RoundedCornerShape(8.dp))
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -674,47 +679,73 @@ private fun TopBar(
                 trackColor = Color.White.copy(alpha = 0.2f),
             )
             Text(
-                "${currentPosition.coerceAtMost(total)} / $total · 剩余 $remaining",
+                "${currentPosition.coerceAtMost(total)} / $total · $remaining 待整理",
                 color = Color.White.copy(alpha = 0.7f),
                 style = MaterialTheme.typography.labelSmall,
             )
         }
-        FeedTopPill(
-            text = if (trashCount > 0) "待删 $trashCount" else "待删",
+        TrashTopButton(
+            count = trashCount,
             onClick = onOpenTrash,
-            highlighted = trashCount > 0,
         )
-        IconButton(
+        FeedTopIconButton(
+            icon = Icons.Default.MoreHoriz,
+            contentDescription = "切换队列",
             onClick = onQueue,
-            modifier = Modifier.background(Color.Black.copy(alpha = 0.42f), CircleShape),
-        ) {
-            Icon(Icons.Default.MoreHoriz, contentDescription = "队列", tint = Color.White)
-        }
+        )
     }
 }
 
 @Composable
-private fun FeedTopPill(
-    text: String,
+private fun FeedTopIconButton(
+    icon: ImageVector,
+    contentDescription: String,
     onClick: () -> Unit,
-    highlighted: Boolean = false,
 ) {
-    val background =
-        if (highlighted) {
-            Color(0xFFFF453A).copy(alpha = 0.28f)
-        } else {
-            Color.Black.copy(alpha = 0.42f)
-        }
-    TextButton(
+    IconButton(
         onClick = onClick,
-        modifier = Modifier.background(background, RoundedCornerShape(8.dp)),
+        modifier =
+            Modifier
+                .size(44.dp)
+                .background(Color.Black.copy(alpha = 0.34f), CircleShape),
     ) {
+        Icon(icon, contentDescription = contentDescription, tint = Color.White)
+    }
+}
+
+@Composable
+private fun TrashTopButton(
+    count: Int,
+    onClick: () -> Unit,
+) {
+    val highlighted = count > 0
+    Row(
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(100.dp))
+                .background(
+                    if (highlighted) {
+                        Color(0xFFFF453A).copy(alpha = 0.32f)
+                    } else {
+                        Color.Black.copy(alpha = 0.34f)
+                    },
+                )
+                .clickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(
+            Icons.Default.DeleteOutline,
+            contentDescription = if (highlighted) "待删除 $count 项" else "待删除",
+            tint = Color.White,
+            modifier = Modifier.size(18.dp),
+        )
         Text(
-            text,
+            count.toString(),
             color = Color.White,
             style = MaterialTheme.typography.labelLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
