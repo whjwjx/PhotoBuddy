@@ -71,6 +71,15 @@ fun HomeScreen(
     val state by vm.uiState.collectAsState()
     val context = LocalContext.current
     val stats = remember(state.assets) { StatsService.compute(state.assets) }
+    val primaryQueue =
+        remember(state.queues) {
+            state.queues.firstOrNull { it.type == QueueType.RANDOM && it.items.isNotEmpty() }
+                ?: state.queues.firstOrNull { it.type == QueueType.UNPROCESSED && it.items.isNotEmpty() }
+        }
+    val organizedProgress =
+        remember(stats.total, state.organizedCount) {
+            if (stats.total == 0) 0f else (state.organizedCount.toFloat() / stats.total).coerceIn(0f, 1f)
+        }
 
     val restoreLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
@@ -118,15 +127,26 @@ fun HomeScreen(
                         "一次只看一张。上滑待删除，下滑收藏，左右滑保留或稍后。",
                         style = MaterialTheme.typography.bodyMedium,
                     )
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        LinearProgressIndicator(
+                            progress = { organizedProgress },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(
+                            "已整理 ${state.organizedCount} / ${stats.total}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
                     Button(
                         onClick = {
-                            state.queues.firstOrNull { it.type == QueueType.UNPROCESSED }?.let { vm.selectQueue(it) }
+                            primaryQueue?.let { vm.selectQueue(it) }
                             onStartOrganize()
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = state.unprocessedCount > 0,
+                        enabled = primaryQueue != null,
                     ) {
-                        Text(if (state.unprocessedCount > 0) "继续整理" else "已经整理完")
+                        Text(primaryQueue?.let { "继续 ${it.displayName}" } ?: "已经整理完")
                     }
                     if (state.isScanning) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
