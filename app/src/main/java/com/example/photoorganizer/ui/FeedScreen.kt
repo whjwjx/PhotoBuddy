@@ -120,6 +120,8 @@ fun FeedScreen(
 
             TopBar(
                 title = state.queueType.label + if (state.queueTitle.isNotEmpty()) " · ${state.queueTitle}" else "",
+                currentPosition = state.currentIndex + 1,
+                total = state.queueItems.size,
                 remaining = state.remaining,
                 trashCount = state.trashCount,
                 onExit = onExit,
@@ -366,6 +368,8 @@ private fun SwipeFeedback(
 @Composable
 private fun TopBar(
     title: String,
+    currentPosition: Int,
+    total: Int,
     remaining: Int,
     trashCount: Int,
     onExit: () -> Unit,
@@ -388,9 +392,13 @@ private fun TopBar(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text("剩余 $remaining", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall)
+            Text(
+                "当前 ${currentPosition.coerceAtMost(total)} / $total · 剩余 $remaining",
+                color = Color.White.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
-        TextButton(onClick = onOpenTrash) { Text("待删 $trashCount", color = Color.White) }
+        TextButton(onClick = onOpenTrash) { Text("待删除 $trashCount", color = Color.White) }
         IconButton(onClick = onQueue) {
             Icon(Icons.Default.MoreHoriz, contentDescription = "队列", tint = Color.White)
         }
