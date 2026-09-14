@@ -15,6 +15,10 @@ interface MediaStatusDao {
     @Query("SELECT * FROM media_status WHERE status = :status")
     fun observeByStatus(status: String): Flow<List<MediaStatusEntity>>
 
+    /** 全部整理状态，用于「未整理」队列计算已处理集合。 */
+    @Query("SELECT * FROM media_status")
+    fun observeAll(): Flow<List<MediaStatusEntity>>
+
     @Query("SELECT COUNT(*) FROM media_status WHERE status = :status")
     suspend fun countByStatus(status: String): Int
 }
