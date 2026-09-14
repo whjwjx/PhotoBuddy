@@ -42,6 +42,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -615,37 +616,88 @@ private fun TopBar(
     onOpenTrash: () -> Unit,
     onQueue: () -> Unit,
 ) {
+    val progress =
+        if (total <= 0) {
+            0f
+        } else {
+            currentPosition.coerceIn(1, total).toFloat() / total.toFloat()
+        }
     Row(
         Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 8.dp, vertical = 8.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        TextButton(onClick = onExit) { Text("关闭", color = Color.White) }
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+        FeedTopPill(text = "关闭", onClick = onExit)
+        Column(
+            Modifier
+                .weight(1f)
+                .background(Color.Black.copy(alpha = 0.42f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
             Text(
                 title,
                 color = Color.White,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth().height(3.dp),
+                color = Color.White,
+                trackColor = Color.White.copy(alpha = 0.2f),
+            )
             Text(
-                "当前 ${currentPosition.coerceAtMost(total)} / $total · 剩余 $remaining",
+                "${currentPosition.coerceAtMost(total)} / $total · 剩余 $remaining",
                 color = Color.White.copy(alpha = 0.7f),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.labelSmall,
             )
         }
+        FeedTopPill(
+            text = if (trashCount > 0) "待删 $trashCount" else "待删",
+            onClick = onOpenTrash,
+            highlighted = trashCount > 0,
+        )
         if (undoAvailable) {
-            TextButton(onClick = onUndo) {
-                Text("撤销", color = Color.White)
-            }
+            FeedTopPill(text = "撤销", onClick = onUndo)
         }
-        TextButton(onClick = onOpenTrash) { Text("待删除 $trashCount", color = Color.White) }
-        IconButton(onClick = onQueue) {
+        IconButton(
+            onClick = onQueue,
+            modifier = Modifier.background(Color.Black.copy(alpha = 0.42f), CircleShape),
+        ) {
             Icon(Icons.Default.MoreHoriz, contentDescription = "队列", tint = Color.White)
         }
+    }
+}
+
+@Composable
+private fun FeedTopPill(
+    text: String,
+    onClick: () -> Unit,
+    highlighted: Boolean = false,
+) {
+    val background =
+        if (highlighted) {
+            Color(0xFFFF453A).copy(alpha = 0.28f)
+        } else {
+            Color.Black.copy(alpha = 0.42f)
+        }
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier.background(background, RoundedCornerShape(8.dp)),
+    ) {
+        Text(
+            text,
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
