@@ -2,9 +2,11 @@ package com.example.photoorganizer.ui
 
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -35,8 +37,6 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -99,6 +99,7 @@ fun FeedScreen(
     val state by vm.uiState.collectAsState()
     var showAddAlbum by remember { mutableStateOf(false) }
     var showQueue by remember { mutableStateOf(false) }
+    var albumActionTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var dragX by remember { mutableStateOf(0f) }
     var dragY by remember { mutableStateOf(0f) }
 
@@ -188,6 +189,7 @@ fun FeedScreen(
                 AlbumQuickBar(
                     state = state,
                     onPick = { vm.addCurrentToAlbum(it) },
+                    onManage = { albumActionTarget = it },
                     onMore = { showAddAlbum = true },
                 )
             }
@@ -220,7 +222,20 @@ fun FeedScreen(
                 vm.addCurrentToAlbum(albumId)
                 showAddAlbum = false
             },
+            onManage = { albumActionTarget = it },
             onDismiss = { showAddAlbum = false },
+        )
+    }
+
+    albumActionTarget?.let { album ->
+        AlbumActionSheet(
+            album = album,
+            count = state.albumCounts[album.id] ?: 0,
+            pinned = album.id in state.pinnedAlbumIds,
+            hidden = album.id in state.hiddenAlbumIds,
+            onTogglePin = { vm.setAlbumPinned(album.id, album.id !in state.pinnedAlbumIds) },
+            onToggleHidden = { vm.setAlbumHidden(album.id, album.id !in state.hiddenAlbumIds) },
+            onDismiss = { albumActionTarget = null },
         )
     }
 
@@ -580,6 +595,7 @@ private fun ActionBar(
 private fun AlbumQuickBar(
     state: HomeUiState,
     onPick: (Long) -> Unit,
+    onManage: (AlbumEntity) -> Unit,
     onMore: () -> Unit,
 ) {
     val quickAlbums =
@@ -606,6 +622,7 @@ private fun AlbumQuickBar(
                 AlbumChip(
                     text = album.name,
                     onClick = { onPick(album.id) },
+                    onLongClick = { onManage(album) },
                 )
             }
             item {
@@ -619,31 +636,123 @@ private fun AlbumQuickBar(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun AlbumChip(
     text: String,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
 ) {
-    AssistChip(
-        onClick = onClick,
-        label = {
-            Text(
-                text,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-        colors =
-            AssistChipDefaults.assistChipColors(
-                containerColor = Color.White.copy(alpha = 0.16f),
-                labelColor = Color.White,
-            ),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.34f)),
-    )
+    Box(
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(100.dp))
+                .background(Color.White.copy(alpha = 0.16f))
+                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.34f)), RoundedCornerShape(100.dp))
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                )
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun AlbumSheetChip(
+    text: String,
+    count: Int,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+) {
+    Box(
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(100.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                )
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            "$text · $count",
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
+private fun AlbumActionSheet(
+    album: AlbumEntity,
+    count: Int,
+    pinned: Boolean,
+    hidden: Boolean,
+    onTogglePin: () -> Unit,
+    onToggleHidden: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 18.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(album.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                "$count 项 · App 内标签",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(
+                onClick = {
+                    onTogglePin()
+                    onDismiss()
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (pinned) "取消置顶" else "置顶到快捷区")
+            }
+            TextButton(
+                onClick = {
+                    onToggleHidden()
+                    onDismiss()
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (hidden) "显示在整理页" else "从整理页隐藏")
+            }
+            Text(
+                "短按相册会把当前照片加入这里；长按可调整快捷区显示。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 private fun AlbumPickerSheet(
     albums: List<AlbumEntity>,
     counts: Map<Long, Int>,
@@ -652,6 +761,7 @@ private fun AlbumPickerSheet(
     hiddenAlbumIds: Set<Long>,
     onCreateAndPick: (String) -> Unit,
     onPick: (Long) -> Unit,
+    onManage: (AlbumEntity) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
@@ -716,6 +826,7 @@ private fun AlbumPickerSheet(
                             text = album.name,
                             count = counts[album.id] ?: 0,
                             onClick = { onPick(album.id) },
+                            onLongClick = { onManage(album) },
                         )
                     }
                 }
@@ -728,6 +839,7 @@ private fun AlbumPickerSheet(
                             text = album.name,
                             count = counts[album.id] ?: 0,
                             onClick = { onPick(album.id) },
+                            onLongClick = { onManage(album) },
                         )
                     }
                 }
@@ -755,7 +867,10 @@ private fun AlbumPickerSheet(
                                 Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(8.dp))
-                                    .clickable { onPick(album.id) }
+                                    .combinedClickable(
+                                        onClick = { onPick(album.id) },
+                                        onLongClick = { onManage(album) },
+                                    )
                                     .padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -781,24 +896,6 @@ private fun AlbumPickerSheet(
             Spacer(Modifier.height(12.dp))
         }
     }
-}
-
-@Composable
-private fun AlbumSheetChip(
-    text: String,
-    count: Int,
-    onClick: () -> Unit,
-) {
-    AssistChip(
-        onClick = onClick,
-        label = {
-            Text(
-                "$text · $count",
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-    )
 }
 
 private fun sortedAlbumsForOrganize(
