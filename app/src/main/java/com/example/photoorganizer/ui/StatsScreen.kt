@@ -180,11 +180,10 @@ fun StatsScreen(
                 )
             }
 
-            Text("队列进度", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("继续整理", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             queueProgressItems.forEach { queue ->
                 QueueProgressRow(
                     queue = queue,
-                    total = stats.total,
                     onClick = {
                         if (queue.items.isNotEmpty()) {
                             vm.selectQueue(queue)
@@ -291,10 +290,8 @@ private fun StatMetricCard(
 @Composable
 private fun QueueProgressRow(
     queue: MediaQueue,
-    total: Int,
     onClick: () -> Unit,
 ) {
-    val progress = if (total == 0) 0f else ((total - queue.items.size).toFloat() / total).coerceIn(0f, 1f)
     Card(
         modifier = Modifier.fillMaxWidth().clickable(enabled = queue.items.isNotEmpty(), onClick = onClick),
         shape = RoundedCornerShape(8.dp),
@@ -319,10 +316,6 @@ private fun QueueProgressRow(
                 }
                 Text(if (queue.items.isNotEmpty()) "继续" else "完成", style = MaterialTheme.typography.labelLarge)
             }
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth(),
-            )
         }
     }
 }
