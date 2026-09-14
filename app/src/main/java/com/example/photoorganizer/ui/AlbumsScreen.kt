@@ -75,6 +75,7 @@ fun AlbumsScreen() {
     var deleteTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var mappingTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var mergeTarget by remember { mutableStateOf<AlbumEntity?>(null) }
+    var previewTarget by remember { mutableStateOf<MediaAsset?>(null) }
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     val openAlbum = state.albums.firstOrNull { it.id == state.openAlbumId }
     val openItems =
@@ -139,8 +140,14 @@ fun AlbumsScreen() {
                 onToggle = { id ->
                     selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
                 },
+                onPreview = { previewTarget = it },
                 onSelectAll = {
-                    selectedIds = if (selectedIds.size == openItems.size) emptySet() else openItems.map { it.id }.toSet()
+                    selectedIds =
+                        if (selectedIds.size == openItems.size) {
+                            emptySet()
+                        } else {
+                            openItems.map { it.id }.toSet()
+                        }
                 },
                 onRemoveSelected = {
                     vm.removeFromAlbum(openAlbum.id, selectedIds)
@@ -149,6 +156,30 @@ fun AlbumsScreen() {
                 modifier = Modifier.padding(padding),
             )
         }
+    }
+
+    val albumForPreview = openAlbum
+    val previewAsset = previewTarget
+    if (albumForPreview != null && previewAsset != null) {
+        AlbumMediaPreviewDialog(
+            albumName = albumForPreview.name,
+            asset = previewAsset,
+            selected = previewAsset.id in selectedIds,
+            onToggleSelected = {
+                selectedIds =
+                    if (previewAsset.id in selectedIds) {
+                        selectedIds - previewAsset.id
+                    } else {
+                        selectedIds + previewAsset.id
+                    }
+            },
+            onRemove = {
+                vm.removeFromAlbum(albumForPreview.id, previewAsset.id)
+                selectedIds = selectedIds - previewAsset.id
+                previewTarget = null
+            },
+            onDismiss = { previewTarget = null },
+        )
     }
 
     renameTarget?.let { album ->
@@ -233,7 +264,10 @@ private fun AlbumList(
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("新建相册", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     OutlinedTextField(
                         value = draftName,
                         onValueChange = onDraftChange,
@@ -258,7 +292,13 @@ private fun AlbumList(
         )
 
         val sortedAlbums =
-            remember(state.albums, state.albumCounts, state.albumLastAddedAt, state.pinnedAlbumIds, state.hiddenAlbumIds) {
+            remember(
+                state.albums,
+                state.albumCounts,
+                state.albumLastAddedAt,
+                state.pinnedAlbumIds,
+                state.hiddenAlbumIds,
+            ) {
                 sortAlbumsForManagement(
                     albums = state.albums,
                     counts = state.albumCounts,
@@ -338,7 +378,12 @@ private fun AlbumRow(
         ) {
             AlbumCover(cover = cover, modifier = Modifier.size(72.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(album.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    album.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Text(
                     buildString {
                         append("$count 项")
@@ -437,6 +482,7 @@ private fun AlbumDetail(
     items: List<MediaAsset>,
     selectedIds: Set<Long>,
     onToggle: (Long) -> Unit,
+    onPreview: (MediaAsset) -> Unit,
     onSelectAll: () -> Unit,
     onRemoveSelected: () -> Unit,
     modifier: Modifier = Modifier,
@@ -473,7 +519,11 @@ private fun AlbumDetail(
                 }
                 if (items.isNotEmpty()) {
                     OutlinedButton(onClick = onRemoveSelected, enabled = selectedIds.isNotEmpty()) {
-                        Icon(Icons.Default.RemoveCircleOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(
+                            Icons.Default.RemoveCircleOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
                         Spacer(Modifier.width(6.dp))
                         Text("移出")
                     }
@@ -494,6 +544,7 @@ private fun AlbumDetail(
                     AlbumMediaTile(
                         asset = asset,
                         selected = asset.id in selectedIds,
+                        onOpen = { onPreview(asset) },
                         onToggle = { onToggle(asset.id) },
                     )
                 }
@@ -506,10 +557,11 @@ private fun AlbumDetail(
 private fun AlbumMediaTile(
     asset: MediaAsset,
     selected: Boolean,
+    onOpen: () -> Unit,
     onToggle: () -> Unit,
 ) {
     Card(
-        modifier = Modifier.clickable(onClick = onToggle),
+        modifier = Modifier.clickable(onClick = onOpen),
         shape = RoundedCornerShape(8.dp),
     ) {
         Box {
@@ -535,6 +587,71 @@ private fun AlbumMediaTile(
             )
         }
     }
+}
+
+@Composable
+private fun AlbumMediaPreviewDialog(
+    albumName: String,
+    asset: MediaAsset,
+    selected: Boolean,
+    onToggleSelected: () -> Unit,
+    onRemove: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(asset.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    "来自「$albumName」",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AsyncImage(
+                    model = asset.uri,
+                    contentDescription = asset.displayName,
+                    modifier = Modifier.fillMaxWidth().height(320.dp),
+                    contentScale = ContentScale.Fit,
+                )
+                Text(
+                    buildString {
+                        append(formatBytes(asset.size))
+                        if (asset.capturedAt > 0) append(" · ${formatDate(asset.capturedAt)}")
+                        if (asset.bucketName.isNotEmpty()) append(" · ${asset.bucketName}")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "移出只会取消 App 内归类，不会删除或移动系统照片文件。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onRemove) {
+                Text("移出相册")
+            }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onToggleSelected) {
+                    Text(if (selected) "取消选择" else "选择")
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("关闭")
+                }
+            }
+        },
+    )
 }
 
 @Composable
