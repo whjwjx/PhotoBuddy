@@ -189,15 +189,7 @@ class HomeViewModel(
         // Android 14+「部分照片访问」检测：这种情况 App 只能看到用户勾选的少量照片，
         // 若不给提示，用户会误以为扫描坏了（PRD 8.2.1 要求覆盖该场景）。
         _uiState.update {
-            it.copy(
-                partialAccess =
-                    ContextCompat.checkSelfPermission(app, Manifest.permission.READ_MEDIA_IMAGES) ==
-                        PackageManager.PERMISSION_GRANTED &&
-                        ContextCompat.checkSelfPermission(
-                            app,
-                            Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
-                        ) == PackageManager.PERMISSION_GRANTED,
-            )
+            it.copy(partialAccess = hasPartialMediaAccess(app))
         }
 
         // 后台增量扫描：首次为空则全量，否则增量
@@ -832,4 +824,18 @@ class HomeViewModel(
         status = status.value,
         updatedAt = System.currentTimeMillis(),
     )
+
+    private fun hasPartialMediaAccess(app: Application): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return false
+        val hasPartial =
+            ContextCompat.checkSelfPermission(app, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) ==
+                PackageManager.PERMISSION_GRANTED
+        val hasFullImages =
+            ContextCompat.checkSelfPermission(app, Manifest.permission.READ_MEDIA_IMAGES) ==
+                PackageManager.PERMISSION_GRANTED
+        val hasFullVideo =
+            ContextCompat.checkSelfPermission(app, Manifest.permission.READ_MEDIA_VIDEO) ==
+                PackageManager.PERMISSION_GRANTED
+        return hasPartial && !(hasFullImages && hasFullVideo)
+    }
 }

@@ -171,7 +171,7 @@ fun HomeScreen(
                 )
             }
 
-            if (state.partialAccess && state.allAssets.isEmpty()) {
+            if (state.partialAccess) {
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("当前是部分照片访问", style = MaterialTheme.typography.titleMedium)
