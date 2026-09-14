@@ -1,6 +1,7 @@
 package com.example.photoorganizer.ui
 
 import android.app.Activity
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items as lazyItems
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -65,6 +68,7 @@ fun TrashScreen(onExit: () -> Unit) {
     val vm: HomeViewModel = viewModel()
     val state by vm.uiState.collectAsState()
     var sort by remember { mutableStateOf(TrashSort.NEWEST) }
+    var sourceFilter by remember { mutableStateOf<String?>(null) }
     var previewAsset by remember { mutableStateOf<MediaAsset?>(null) }
     val items =
         when (sort) {
@@ -72,10 +76,26 @@ fun TrashScreen(onExit: () -> Unit) {
             TrashSort.LARGEST -> state.trashItems.sortedByDescending { it.size }
             TrashSort.OLDEST -> state.trashItems.sortedBy { if (it.capturedAt > 0) it.capturedAt else Long.MAX_VALUE }
         }
+    val sourceOptions =
+        remember(items) {
+            items
+                .groupBy { it.sourceName() }
+                .map { (name, sourceItems) -> name to sourceItems.size }
+                .sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first })
+        }
+    val visibleItems =
+        remember(items, sourceFilter) {
+            if (sourceFilter == null) {
+                items
+            } else {
+                items.filter { it.sourceName() == sourceFilter }
+            }
+        }
+    val visibleIds = remember(visibleItems) { visibleItems.map { it.id }.toSet() }
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
 
-    LaunchedEffect(items.map { it.id }) {
-        selectedIds = items.map { it.id }.toSet()
+    LaunchedEffect(visibleIds) {
+        selectedIds = visibleIds
     }
 
     val deleteLauncher =
@@ -96,24 +116,24 @@ fun TrashScreen(onExit: () -> Unit) {
                     TextButton(onClick = onExit) { Text("返回") }
                 },
                 actions = {
-                    if (items.isNotEmpty()) {
+                    if (visibleItems.isNotEmpty()) {
                         TextButton(
                             onClick = {
                                 selectedIds =
-                                    if (selectedIds.size == items.size) emptySet() else items.map { it.id }.toSet()
+                                    if (visibleIds.all { it in selectedIds }) emptySet() else visibleIds
                             },
                         ) {
-                            Text(if (selectedIds.size == items.size) "全不选" else "全选")
+                            Text(if (visibleIds.all { it in selectedIds }) "全不选" else "全选")
                         }
                     }
                 },
             )
         },
         bottomBar = {
-            if (items.isNotEmpty()) {
+            if (visibleItems.isNotEmpty()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "已选 ${selectedIds.size} 项 · 预计释放 ${formatBytes(items.sumSelectedBytes(selectedIds))}",
+                        "已选 ${selectedIds.size} 项 · 预计释放 ${formatBytes(visibleItems.sumSelectedBytes(selectedIds))}",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -154,13 +174,28 @@ fun TrashScreen(onExit: () -> Unit) {
             ) {
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("${items.size} 项等待确认", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "确认前不会删除。支持系统回收站时，会先移入最近删除。",
+                            if (sourceFilter == null) {
+                                "${items.size} 项等待确认"
+                            } else {
+                                "${visibleItems.size} 项来自 $sourceFilter"
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            deletePolicyText(),
                             style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
+                Spacer(Modifier.height(10.dp))
+                SourceFilterRow(
+                    options = sourceOptions,
+                    selected = sourceFilter,
+                    onSelect = { sourceFilter = it },
+                )
+                Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     TrashSort.entries.forEach { option ->
                         OutlinedButton(
@@ -172,26 +207,30 @@ fun TrashScreen(onExit: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    items(items, key = { it.id }) { asset ->
-                        TrashTile(
-                            asset = asset,
-                            selected = asset.id in selectedIds,
-                            onOpen = { previewAsset = asset },
-                            onToggle = {
-                                selectedIds =
-                                    if (asset.id in selectedIds) {
-                                        selectedIds - asset.id
-                                    } else {
-                                        selectedIds + asset.id
-                                    }
-                            },
-                        )
+                if (visibleItems.isEmpty()) {
+                    EmptyFilteredTrash(Modifier.fillMaxSize())
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        items(visibleItems, key = { it.id }) { asset ->
+                            TrashTile(
+                                asset = asset,
+                                selected = asset.id in selectedIds,
+                                onOpen = { previewAsset = asset },
+                                onToggle = {
+                                    selectedIds =
+                                        if (asset.id in selectedIds) {
+                                            selectedIds - asset.id
+                                        } else {
+                                            selectedIds + asset.id
+                                        }
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -212,6 +251,37 @@ fun TrashScreen(onExit: () -> Unit) {
             },
             onDismiss = { previewAsset = null },
         )
+    }
+}
+
+@Composable
+private fun SourceFilterRow(
+    options: List<Pair<String, Int>>,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            "按来源相册复核",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            item {
+                FilterChipButton(
+                    text = "全部 · ${options.sumOf { it.second }}",
+                    selected = selected == null,
+                    onClick = { onSelect(null) },
+                )
+            }
+            lazyItems(options, key = { it.first }) { (name, count) ->
+                FilterChipButton(
+                    text = "$name · $count",
+                    selected = selected == name,
+                    onClick = { onSelect(name) },
+                )
+            }
+        }
     }
 }
 
@@ -318,5 +388,37 @@ private fun EmptyTrash(modifier: Modifier = Modifier) {
     }
 }
 
+@Composable
+private fun EmptyFilteredTrash(modifier: Modifier = Modifier) {
+    Column(
+        modifier.padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            "这个来源没有待删除照片",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "换一个来源相册，或回到全部继续复核。",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
 private fun List<MediaAsset>.sumSelectedBytes(selectedIds: Set<Long>): Long =
     filter { it.id in selectedIds }.sumOf { it.size }
+
+private fun MediaAsset.sourceName(): String =
+    bucketName.ifBlank { "未知来源" }
+
+private fun deletePolicyText(): String =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        "确认前不会删除。确认后会请求系统移入最近删除，可在系统相册中恢复；若系统拒绝，本页会保留待删除状态。"
+    } else {
+        "确认前不会删除。当前系统可能不支持最近删除，确认后可能从设备永久删除。"
+    }
