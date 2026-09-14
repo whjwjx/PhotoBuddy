@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.photoorganizer.R
+import com.example.photoorganizer.data.local.UserActionLogEntity
 import com.example.photoorganizer.domain.MediaQueue
 import com.example.photoorganizer.domain.QueueType
 import com.example.photoorganizer.domain.StatsService
@@ -193,6 +194,10 @@ fun HomeScreen(
                 },
             )
 
+            if (state.recentLogs.isNotEmpty()) {
+                RecentActivityCard(logs = state.recentLogs.take(5))
+            }
+
             if (state.deletedLogs.isNotEmpty()) {
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -214,6 +219,46 @@ fun HomeScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentActivityCard(logs: List<UserActionLogEntity>) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("最近整理", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "刚刚处理过的照片会留在这里，方便回看整理路径。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            logs.forEach { log ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            log.mediaName,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            "${log.source} · ${formatDate(log.createdAt)}",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        actionLabel(log),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                 }
             }
         }
@@ -372,3 +417,16 @@ private fun QueueCard(
         }
     }
 }
+
+private fun actionLabel(log: UserActionLogEntity): String =
+    when (log.action) {
+        "keep" -> "已保留"
+        "later" -> "稍后"
+        "trash" -> "待删除"
+        "favorite" -> "已收藏"
+        "delete" -> if (log.freedBytes > 0) "已删除 ${formatBytes(log.freedBytes)}" else "已删除"
+        "restore" -> "已恢复"
+        "undo" -> "已撤销"
+        "permanent" -> "永久保留"
+        else -> log.action
+    }
