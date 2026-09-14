@@ -72,15 +72,18 @@ fun AppRoot() {
 
     var tab by remember { mutableStateOf(AppTab.HOME) }
     Scaffold(
+        // 刷照片流是全屏沉浸式，隐藏底部导航
         bottomBar = {
-            NavigationBar {
-                AppTab.values().forEach { t ->
-                    NavigationBarItem(
-                        selected = tab == t,
-                        onClick = { tab = t },
-                        icon = {},
-                        label = { Text(t.label) },
-                    )
+            if (tab != AppTab.ORGANIZE) {
+                NavigationBar {
+                    AppTab.values().forEach { t ->
+                        NavigationBarItem(
+                            selected = tab == t,
+                            onClick = { tab = t },
+                            icon = {},
+                            label = { Text(t.label) },
+                        )
+                    }
                 }
             }
         },
@@ -88,7 +91,7 @@ fun AppRoot() {
         Box(Modifier.padding(padding)) {
             when (tab) {
                 AppTab.HOME -> HomeScreen(onStartOrganize = { tab = AppTab.ORGANIZE })
-                AppTab.ORGANIZE -> OrganizeScreen()
+                AppTab.ORGANIZE -> FeedScreen(onExit = { tab = AppTab.HOME })
                 AppTab.ALBUMS -> AlbumsScreen()
                 AppTab.SETTINGS -> SettingsScreen()
             }

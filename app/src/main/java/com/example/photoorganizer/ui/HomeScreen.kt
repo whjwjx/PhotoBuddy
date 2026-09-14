@@ -98,7 +98,7 @@ fun HomeScreen(onStartOrganize: () -> Unit) {
 
             Spacer(Modifier.height(16.dp))
             Button(onClick = onStartOrganize, modifier = Modifier.fillMaxWidth()) {
-                Text("开始整理")
+                Text("开始刷照片")
             }
 
             Spacer(Modifier.height(12.dp))

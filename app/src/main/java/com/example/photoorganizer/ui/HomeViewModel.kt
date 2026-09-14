@@ -179,6 +179,13 @@ class HomeViewModel(
         }
     }
 
+    /** 刷照片流滑动到某一页时同步索引，保证操作作用于当前可见的卡片。 */
+    fun setIndex(index: Int) {
+        _uiState.update { s ->
+            if (s.currentIndex == index) s else s.copy(currentIndex = index.coerceIn(0, s.queueItems.size))
+        }
+    }
+
     fun selectQueue(queue: MediaQueue) {
         _uiState.update { s ->
             recompute(
