@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -69,6 +70,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -88,6 +90,10 @@ import com.example.photoorganizer.domain.QueueType
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.min
+import kotlin.math.roundToInt
+
+private const val SWIPE_ACTION_THRESHOLD = 120f
+private const val SWIPE_HINT_THRESHOLD = 36f
 
 /** Slidebox 式单卡整理流：当前照片做完一个决策后自动推进到下一张。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -138,6 +144,8 @@ fun FeedScreen(
         } else {
             FeedPage(
                 asset = asset,
+                dragX = dragX,
+                dragY = dragY,
                 onKeep = { vm.act(MediaStatus.KEEP) },
                 onLater = { vm.act(MediaStatus.LATER) },
                 onTrash = { vm.act(MediaStatus.TRASH) },
@@ -165,7 +173,10 @@ fun FeedScreen(
                 onQueue = { showQueue = true },
             )
 
-            GestureHints(Modifier.align(Alignment.Center))
+            GestureHints(
+                visible = abs(dragX) <= SWIPE_HINT_THRESHOLD && abs(dragY) <= SWIPE_HINT_THRESHOLD,
+                modifier = Modifier.align(Alignment.Center),
+            )
             SwipeFeedback(
                 dragX = dragX,
                 dragY = dragY,
@@ -371,6 +382,8 @@ private fun EdgeTapZone(
 @Composable
 private fun FeedPage(
     asset: MediaAsset,
+    dragX: Float,
+    dragY: Float,
     onKeep: () -> Unit,
     onLater: () -> Unit,
     onTrash: () -> Unit,
@@ -398,10 +411,10 @@ private fun FeedPage(
                     onDragEnd = {
                         val horizontal = abs(totalX) > abs(totalY)
                         when {
-                            horizontal && totalX > 120f -> onKeep()
-                            horizontal && totalX < -120f -> onLater()
-                            !horizontal && totalY < -120f -> onTrash()
-                            !horizontal && totalY > 120f -> onFavorite()
+                            horizontal && totalX > SWIPE_ACTION_THRESHOLD -> onKeep()
+                            horizontal && totalX < -SWIPE_ACTION_THRESHOLD -> onLater()
+                            !horizontal && totalY < -SWIPE_ACTION_THRESHOLD -> onTrash()
+                            !horizontal && totalY > SWIPE_ACTION_THRESHOLD -> onFavorite()
                         }
                         onDragFeedback(0f, 0f)
                     },
@@ -411,13 +424,22 @@ private fun FeedPage(
                 )
             },
     ) {
+        val photoOffset =
+            IntOffset(
+                x = (dragX * 0.12f).roundToInt(),
+                y = (dragY * 0.12f).roundToInt(),
+            )
+        val mediaModifier =
+            Modifier
+                .fillMaxSize()
+                .offset { photoOffset }
         if (asset.mediaType == MediaType.VIDEO) {
-            VideoPage(uri = asset.uri, active = true, modifier = Modifier.fillMaxSize())
+            VideoPage(uri = asset.uri, active = true, modifier = mediaModifier)
         } else {
             AsyncImage(
                 model = asset.uri,
                 contentDescription = asset.displayName,
-                modifier = Modifier.fillMaxSize(),
+                modifier = mediaModifier,
                 contentScale = ContentScale.Fit,
             )
         }
@@ -427,6 +449,12 @@ private fun FeedPage(
 private data class SimilarCandidate(
     val index: Int,
     val asset: MediaAsset,
+)
+
+private data class DragDecision(
+    val label: String,
+    val helper: String,
+    val color: Color,
 )
 
 @Composable
@@ -528,8 +556,10 @@ private fun SwipeFeedback(
     modifier: Modifier = Modifier,
 ) {
     val horizontal = abs(dragX) > abs(dragY)
-    val active = abs(dragX) > 36f || abs(dragY) > 36f
+    val distance = maxOf(abs(dragX), abs(dragY))
+    val active = distance > SWIPE_HINT_THRESHOLD
     if (!active) return
+    val armed = distance >= SWIPE_ACTION_THRESHOLD
     val label =
         when {
             horizontal && dragX > 0 -> "保留"
@@ -537,6 +567,7 @@ private fun SwipeFeedback(
             dragY < 0 -> "加入待删除"
             else -> "收藏"
         }
+    val helper = if (armed) "松手执行" else "继续拖动"
     val color =
         when (label) {
             "加入待删除" -> Color(0xFFE53935)
@@ -544,20 +575,28 @@ private fun SwipeFeedback(
             "保留" -> Color(0xFF43A047)
             else -> Color(0xFF42A5F5)
         }
-    val alpha = min(0.86f, (maxOf(abs(dragX), abs(dragY)) / 180f).coerceAtLeast(0.28f))
+    val decision = DragDecision(label = label, helper = helper, color = color)
+    val alpha = min(0.9f, (distance / 180f).coerceAtLeast(0.28f))
     Box(
         modifier =
             modifier
-                .background(color.copy(alpha = alpha), RoundedCornerShape(8.dp))
+                .background(decision.color.copy(alpha = alpha), RoundedCornerShape(8.dp))
                 .padding(horizontal = 22.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            label,
-            color = Color.White,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                decision.label,
+                color = Color.White,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                decision.helper,
+                color = Color.White.copy(alpha = 0.82f),
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
     }
 }
 
@@ -630,8 +669,16 @@ private fun UndoBanner(
 }
 
 @Composable
-private fun GestureHints(modifier: Modifier = Modifier) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(120.dp)) {
+private fun GestureHints(
+    visible: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    if (!visible) return
+    Column(
+        modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(120.dp),
+    ) {
         Text("下滑收藏", color = Color.White.copy(alpha = 0.45f), style = MaterialTheme.typography.labelMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(96.dp)) {
             Text("稍后", color = Color.White.copy(alpha = 0.4f), style = MaterialTheme.typography.labelMedium)
