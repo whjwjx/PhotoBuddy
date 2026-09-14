@@ -28,6 +28,7 @@ import com.example.photoorganizer.domain.MediaQueue
 import com.example.photoorganizer.domain.QueueEngine
 import com.example.photoorganizer.domain.QueueType
 import com.example.photoorganizer.worker.ScanWorker
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +36,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 private const val DAY_MS = 24L * 60 * 60 * 1000
+private const val UNDO_VISIBLE_MS = 6_000L
 
 data class UndoState(
     val mediaId: Long,
@@ -42,6 +44,7 @@ data class UndoState(
     val mediaType: String,
     val beforeStatus: String?,
     val message: String,
+    val createdAt: Long,
 )
 
 data class HomeUiState(
@@ -722,6 +725,7 @@ class HomeViewModel(
         status: MediaStatus,
         message: String = actionMessage(status),
     ) {
+        val now = System.currentTimeMillis()
         val before = dao.get(asset.id)?.status.orEmpty()
         val source = _uiState.value.queueSource
         dao.upsert(toEntity(asset, status))
@@ -735,25 +739,42 @@ class HomeViewModel(
                 beforeState = before,
                 afterState = status.value,
                 freedBytes = 0L,
-                createdAt = System.currentTimeMillis(),
+                createdAt = now,
             ),
         )
+        val undo =
+            UndoState(
+                mediaId = asset.id,
+                mediaName = asset.displayName,
+                mediaType = asset.mediaType.name,
+                beforeStatus = before.ifEmpty { null },
+                message = message,
+                createdAt = now,
+            )
         _uiState.update { s ->
             recompute(
                 s.copy(
                     currentIndex = s.currentIndex.coerceAtMost(s.queueItems.size),
                     processedCount = s.processedCount + 1,
-                    undo = UndoState(
-                        mediaId = asset.id,
-                        mediaName = asset.displayName,
-                        mediaType = asset.mediaType.name,
-                        beforeStatus = before.ifEmpty { null },
-                        message = message,
-                    ),
+                    undo = undo,
                 ),
             )
         }
+        clearUndoAfterDelay(undo)
         settingsRepo.addProcessed(1)
+    }
+
+    private fun clearUndoAfterDelay(undo: UndoState) {
+        viewModelScope.launch {
+            delay(UNDO_VISIBLE_MS)
+            _uiState.update { state ->
+                if (state.undo?.mediaId == undo.mediaId && state.undo?.createdAt == undo.createdAt) {
+                    state.copy(undo = null)
+                } else {
+                    state
+                }
+            }
+        }
     }
 
     private fun actionMessage(status: MediaStatus): String =
