@@ -1,10 +1,12 @@
 package com.example.photoorganizer.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,18 +22,20 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoAlbum
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,6 +57,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -560,16 +565,29 @@ private fun AlbumMediaTile(
     onOpen: () -> Unit,
     onToggle: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(8.dp)
     Card(
-        modifier = Modifier.clickable(onClick = onOpen),
-        shape = RoundedCornerShape(8.dp),
+        modifier =
+            Modifier
+                .clickable(onClick = onOpen)
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color =
+                        if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                        },
+                    shape = shape,
+                ),
+        shape = shape,
     ) {
-        Box {
-            Column {
+        Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.82f)) {
+            Column(Modifier.fillMaxSize()) {
                 AsyncImage(
                     model = asset.uri,
                     contentDescription = asset.displayName,
-                    modifier = Modifier.fillMaxWidth().height(112.dp),
+                    modifier = Modifier.fillMaxWidth().weight(1f),
                     contentScale = ContentScale.Crop,
                 )
                 Text(
@@ -580,12 +598,43 @@ private fun AlbumMediaTile(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            Checkbox(
-                checked = selected,
-                onCheckedChange = { onToggle() },
-                modifier = Modifier.align(Alignment.TopEnd),
+            if (selected) {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)))
+            }
+            AlbumSelectionBadge(
+                selected = selected,
+                onClick = onToggle,
+                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun AlbumSelectionBadge(
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .size(28.dp)
+                .background(Color.White.copy(alpha = 0.92f), CircleShape)
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (selected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+            contentDescription = if (selected) "取消选择" else "选择",
+            tint =
+                if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            modifier = Modifier.size(22.dp),
+        )
     }
 }
 
