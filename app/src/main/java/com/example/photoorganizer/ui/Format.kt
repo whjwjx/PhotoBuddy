@@ -17,3 +17,10 @@ internal fun formatBytes(bytes: Long): String {
 
 internal fun formatDate(ms: Long): String =
     SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(ms))
+
+/** 视频时长：mm:ss。 */
+internal fun formatDuration(ms: Long): String {
+    if (ms <= 0) return "00:00"
+    val totalSec = ms / 1000
+    return String.format(Locale.getDefault(), "%02d:%02d", totalSec / 60, totalSec % 60)
+}

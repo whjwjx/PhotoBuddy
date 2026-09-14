@@ -9,6 +9,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,8 @@ import androidx.compose.material.icons.filled.AddToPhotos
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -35,6 +38,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -64,6 +68,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
 import com.example.photoorganizer.data.MediaAsset
 import com.example.photoorganizer.data.MediaType
 import com.example.photoorganizer.data.local.MediaStatus
@@ -335,7 +340,12 @@ private fun FeedPage(
     }
 }
 
-/** 视频页：Media3/ExoPlayer 自动播放（PRD 5.5 / 8.2）。 */
+/**
+ * 视频页：Media3/ExoPlayer 自动播放 + 播放控制（PRD 5.5 / 8.2）。
+ * - 成为当前页自动播放，离开自动暂停
+ * - 点击画面暂停/继续
+ * - 底部进度条可拖动 seek，显示当前时间/总时长
+ */
 @Composable
 private fun VideoPage(
     uri: Uri,
@@ -352,21 +362,102 @@ private fun VideoPage(
                 playWhenReady = false
             }
         }
+
+    var playing by remember { mutableStateOf(false) }
+    var position by remember { mutableStateOf(0L) }
+    var duration by remember { mutableStateOf(0L) }
+    var scrubbing by remember { mutableStateOf(false) }
+
+    fun toggle() {
+        if (player.isPlaying) {
+            player.pause()
+        } else {
+            player.play()
+        }
+        playing = player.isPlaying
+    }
+
     LaunchedEffect(active) {
-        if (active) player.play() else player.pause()
+        if (!active) {
+            player.pause()
+            playing = false
+            return@LaunchedEffect
+        }
+        player.play()
+        playing = true
+        while (active) {
+            if (!scrubbing) {
+                position = player.currentPosition.coerceAtLeast(0L)
+                duration = player.duration.takeIf { it > 0 } ?: 0L
+            }
+            playing = player.isPlaying
+            delay(300)
+        }
     }
     DisposableEffect(uri) { onDispose { player.release() } }
 
-    AndroidView(
-        factory = { ctx ->
-            PlayerView(ctx).apply {
-                this.player = player
-                useController = false
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+    Box(modifier = modifier.background(Color.Black)) {
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    this.player = player
+                    useController = false
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        // 点击画面切换播放/暂停
+        Box(
+            Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { toggle() },
+        )
+
+        // 底部播放控制条：抬高 104dp 避开底部信息文字，同时不贴屏幕边缘（避免触发系统手势）
+        Row(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(start = 4.dp, end = 8.dp, bottom = 104.dp)
+                .background(
+                    Color.Black.copy(alpha = 0.45f),
+                    shape = MaterialTheme.shapes.small,
+                ).padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = { toggle() }, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (playing) "暂停" else "播放",
+                    tint = Color.White,
+                )
             }
-        },
-        modifier = modifier,
-    )
+            Slider(
+                value = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
+                onValueChange = { v ->
+                    scrubbing = true
+                    position = (v * duration).toLong()
+                },
+                onValueChangeFinished = {
+                    player.seekTo(position)
+                    scrubbing = false
+                },
+                // 限制高度，默认 48dp 会把控制条撑得过高
+                modifier = Modifier.weight(1f).height(20.dp),
+            )
+            Text(
+                "${formatDuration(position)} / ${formatDuration(duration)}",
+                color = Color.White,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+            )
+        }
+    }
 }
 
 @Composable

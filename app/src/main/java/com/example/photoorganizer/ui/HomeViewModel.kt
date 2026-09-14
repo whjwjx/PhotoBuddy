@@ -17,6 +17,7 @@ import com.example.photoorganizer.data.local.AlbumItemEntity
 import com.example.photoorganizer.data.local.AppDatabase
 import com.example.photoorganizer.data.local.MediaStatus
 import com.example.photoorganizer.data.local.MediaStatusEntity
+import com.example.photoorganizer.data.local.UserActionLogEntity
 import com.example.photoorganizer.domain.DeleteCoordinator
 import com.example.photoorganizer.domain.MediaQueue
 import com.example.photoorganizer.domain.QueueEngine
@@ -65,6 +66,10 @@ data class HomeUiState(
     val lastScanMs: Long = 0L,
     val lastSyncAdded: Int = 0,
     val daily: DailyProgress = DailyProgress("", 0),
+    /** 扫描进度：已扫描条数，用于边扫边展示（PRD 4.1）。 */
+    val scanProgress: Int = 0,
+    /** 最近处理记录（PRD 六·首页 / 9.5 操作日志）。 */
+    val recentLogs: List<UserActionLogEntity> = emptyList(),
 ) {
     val current: MediaAsset? get() = queueItems.getOrNull(currentIndex)
     val remaining: Int get() = (queueItems.size - currentIndex).coerceAtLeast(0)
@@ -74,6 +79,10 @@ data class HomeUiState(
 
     /** 今日任务是否完成。 */
     val dailyDone: Boolean get() = daily.count >= settings.dailyGoal && settings.dailyGoal > 0
+
+    /** 当前队列来源描述，写入操作日志（PRD 9.5 source）。 */
+    val queueSource: String
+        get() = queueType.label + (if (queueTitle.isNotEmpty()) " · $queueTitle" else "")
 
     fun isProtected(asset: MediaAsset): Boolean =
         (settings.protectFavorite && asset.isFavorite) ||
@@ -93,6 +102,7 @@ class HomeViewModel(
     private val dao = db.mediaStatusDao()
     private val albumDao = db.albumDao()
     private val indexDao = db.mediaIndexDao()
+    private val logDao = db.userActionLogDao()
     private val coordinator = DeleteCoordinator(app.contentResolver)
     private val settingsRepo = SettingsRepository(app)
     private val library =
@@ -129,6 +139,9 @@ class HomeViewModel(
         viewModelScope.launch {
             settingsRepo.daily.collect { d -> _uiState.update { it.copy(daily = d) } }
         }
+        viewModelScope.launch {
+            logDao.observeRecent(20).collect { list -> _uiState.update { it.copy(recentLogs = list) } }
+        }
 
         // 后台增量扫描：首次为空则全量，否则增量
         viewModelScope.launch {
@@ -148,10 +161,19 @@ class HomeViewModel(
      */
     fun scan(full: Boolean = false) {
         _uiState.update {
-            it.copy(isScanning = true, error = null, currentIndex = 0, processedCount = 0, freedBytes = 0)
+            it.copy(
+                isScanning = true,
+                error = null,
+                scanProgress = 0,
+                currentIndex = 0,
+                processedCount = 0,
+                freedBytes = 0,
+            )
         }
         viewModelScope.launch {
-            runCatching { library.sync(full) }
+            runCatching {
+                library.sync(full) { scanned -> _uiState.update { it.copy(scanProgress = scanned) } }
+            }
                 .onSuccess { added ->
                     _uiState.update { s ->
                         recompute(
@@ -404,7 +426,21 @@ class HomeViewModel(
         asset: MediaAsset,
         status: MediaStatus,
     ) {
+        val before = dao.get(asset.id)?.status.orEmpty()
+        val source = _uiState.value.queueSource
         dao.upsert(toEntity(asset, status))
+        logDao.insert(
+            UserActionLogEntity(
+                mediaId = asset.id,
+                mediaName = asset.displayName,
+                action = status.value,
+                source = source,
+                beforeState = before,
+                afterState = status.value,
+                freedBytes = if (status == MediaStatus.DELETE) asset.size else 0L,
+                createdAt = System.currentTimeMillis(),
+            ),
+        )
         settingsRepo.addProcessed(1)
         _uiState.update { s ->
             val isDelete = status == MediaStatus.DELETE
@@ -425,10 +461,24 @@ class HomeViewModel(
 
     private suspend fun finishBatch(ids: Set<Long>) {
         val byId = _uiState.value.allAssets.associateBy { it.id }
+        val source = _uiState.value.queueSource
         var freed = 0L
         ids.forEach { id ->
             byId[id]?.let { asset ->
+                val before = dao.get(asset.id)?.status.orEmpty()
                 dao.upsert(toEntity(asset, MediaStatus.DELETE))
+                logDao.insert(
+                    UserActionLogEntity(
+                        mediaId = asset.id,
+                        mediaName = asset.displayName,
+                        action = MediaStatus.DELETE.value,
+                        source = source,
+                        beforeState = before,
+                        afterState = MediaStatus.DELETE.value,
+                        freedBytes = asset.size,
+                        createdAt = System.currentTimeMillis(),
+                    ),
+                )
                 freed += asset.size
             }
         }

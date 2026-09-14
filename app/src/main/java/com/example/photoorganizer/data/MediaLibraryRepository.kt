@@ -23,12 +23,20 @@ class MediaLibraryRepository(
     /**
      * 同步媒体库。
      * @param full true=全量重建（sinceSec=0 即查全部）；false=只同步上次扫描之后新增的部分。
-     * @return 新增/更新的条数。
+     * @param onProgress 每入库一批回调一次已扫描条数，用于界面边扫边显示（PRD 4.1）。
+     * @return 本次扫描到的总条数。
      */
-    suspend fun sync(full: Boolean = false): Int {
+    suspend fun sync(
+        full: Boolean = false,
+        onProgress: ((scanned: Int) -> Unit)? = null,
+    ): Int {
         val sinceSec = if (full) 0L else settings.getLastScanMs() / 1000
-        val fresh = mediaStore.loadSince(sinceSec)
-        if (fresh.isNotEmpty()) indexDao.upsertAll(fresh.map { it.toIndex() })
+        var total = 0
+        mediaStore.loadSinceBatched(sinceSec) { batch, count ->
+            indexDao.upsertAll(batch.map { it.toIndex() })
+            total = count
+            onProgress?.invoke(count)
+        }
 
         // 删除检测：索引里有、但 MediaStore 已查不到的（含被移入系统最近删除的）
         val currentIds = mediaStore.loadAllIds()
@@ -36,6 +44,6 @@ class MediaLibraryRepository(
         if (removed.isNotEmpty()) indexDao.deleteByIds(removed.toList())
 
         settings.setLastScanMs(System.currentTimeMillis())
-        return fresh.size
+        return total
     }
 }

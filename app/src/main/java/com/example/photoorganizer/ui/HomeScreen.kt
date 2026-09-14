@@ -24,9 +24,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.photoorganizer.R
+import com.example.photoorganizer.data.local.MediaStatus
 import com.example.photoorganizer.domain.QueueType
 import com.example.photoorganizer.domain.StatsService
 
@@ -47,7 +49,7 @@ fun HomeScreen(onStartOrganize: () -> Unit) {
                     .padding(16.dp),
         ) {
             Button(onClick = { vm.scan() }, enabled = !state.isScanning) {
-                Text(if (state.isScanning) "扫描中…" else "扫描相册")
+                Text(if (state.isScanning) "扫描中… 已扫描 ${state.scanProgress} 项" else "扫描相册")
             }
             state.error?.let {
                 Text(
@@ -93,6 +95,32 @@ fun HomeScreen(onStartOrganize: () -> Unit) {
                     Text("今日已处理 ${state.processedCount} 项")
                     Text("累计释放 ${formatBytes(state.freedBytes)}")
                     Text("当前队列待整理 ${state.remaining} 项")
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("最近处理记录", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(6.dp))
+                    if (state.recentLogs.isEmpty()) {
+                        Text(
+                            "还没有处理记录，去刷几张试试。",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    } else {
+                        state.recentLogs.take(5).forEach { log ->
+                            val label =
+                                MediaStatus.values().firstOrNull { it.value == log.action }?.label
+                                    ?: log.action
+                            Text(
+                                "${log.mediaName} · $label · ${log.source} · ${formatDate(log.createdAt)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
 

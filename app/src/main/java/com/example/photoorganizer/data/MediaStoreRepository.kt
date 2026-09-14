@@ -2,6 +2,7 @@ package com.example.photoorganizer.data
 
 import android.content.ContentResolver
 import android.content.ContentUris
+import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -14,18 +15,49 @@ import kotlinx.coroutines.withContext
  */
 class MediaStoreRepository(private val resolver: ContentResolver) {
 
-    suspend fun loadAll(): List<MediaAsset> = withContext(Dispatchers.IO) {
-        buildList {
-            addAll(query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, MediaType.IMAGE))
-            addAll(query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, MediaType.VIDEO))
-        }
-    }
-
-    /** 增量查询：只取 DATE_ADDED 晚于 sinceSec（秒）的媒体，用于增量扫描。 */
-    suspend fun loadSince(sinceSec: Long): List<MediaAsset> = withContext(Dispatchers.IO) {
+    /** 全量或按时间增量查询（sinceSec=0 表示查全部）。 */
+    suspend fun loadSince(sinceSec: Long = 0L): List<MediaAsset> = withContext(Dispatchers.IO) {
         buildList {
             addAll(query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, MediaType.IMAGE, sinceSec))
             addAll(query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, MediaType.VIDEO, sinceSec))
+        }
+    }
+
+    /**
+     * 分批产出媒体（PRD 4.1：扫描期间先展示已扫描部分）。
+     * 每积累 batchSize 条就回调一次，调用方可即时入库，让界面边扫边显示。
+     */
+    suspend fun loadSinceBatched(
+        sinceSec: Long = 0L,
+        batchSize: Int = 300,
+        onBatch: suspend (List<MediaAsset>, Int) -> Unit,
+    ) = withContext(Dispatchers.IO) {
+        var total = 0
+        val buffer = mutableListOf<MediaAsset>()
+        listOf(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI to MediaType.IMAGE,
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI to MediaType.VIDEO,
+        ).forEach { (base, type) ->
+            val (selection, args) = selectionFor(sinceSec)
+            runCatching {
+                resolver
+                    .query(base, projectionFor(type), selection, args, SORT)
+                    ?.use { cursor ->
+                        val cols = Columns(cursor, type)
+                        while (cursor.moveToNext()) {
+                            buffer += cols.read(cursor, base, type)
+                            if (buffer.size >= batchSize) {
+                                total += buffer.size
+                                onBatch(buffer.toList(), total)
+                                buffer.clear()
+                            }
+                        }
+                    }
+            }
+        }
+        if (buffer.isNotEmpty()) {
+            total += buffer.size
+            onBatch(buffer.toList(), total)
         }
     }
 
@@ -48,84 +80,99 @@ class MediaStoreRepository(private val resolver: ContentResolver) {
         ids
     }
 
-    private fun query(
+    private suspend fun query(
         baseUri: Uri,
         type: MediaType,
-        sinceSec: Long = 0L,
-    ): List<MediaAsset> {
-        val projection =
-            buildList {
-                add(MediaStore.MediaColumns._ID)
-                add(MediaStore.MediaColumns.DISPLAY_NAME)
-                add(MediaStore.MediaColumns.MIME_TYPE)
-                add(MediaStore.MediaColumns.SIZE)
-                add(MediaStore.MediaColumns.WIDTH)
-                add(MediaStore.MediaColumns.HEIGHT)
-                add(MediaStore.MediaColumns.DATE_TAKEN)
-                add(MediaStore.MediaColumns.DATE_ADDED)
-                add(MediaStore.MediaColumns.BUCKET_ID)
-                add(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    add(MediaStore.MediaColumns.IS_FAVORITE)
-                }
-                if (type == MediaType.VIDEO) add(MediaStore.Video.Media.DURATION)
-            }
-
-        val selection = if (sinceSec > 0) "${MediaStore.MediaColumns.DATE_ADDED} > ?" else null
-        val selectionArgs = if (sinceSec > 0) arrayOf(sinceSec.toString()) else null
-
+        sinceSec: Long,
+    ): List<MediaAsset> = withContext(Dispatchers.IO) {
+        val (selection, args) = selectionFor(sinceSec)
         val out = mutableListOf<MediaAsset>()
         runCatching {
             resolver
-                .query(
-                    baseUri,
-                    projection.toTypedArray(),
-                    selection,
-                    selectionArgs,
-                    "${MediaStore.MediaColumns.DATE_TAKEN} DESC",
-                ).use { cursor ->
-                    if (cursor == null) return@use
-                    val idIdx = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
-                    val nameIdx = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
-                    val mimeIdx = cursor.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE)
-                    val sizeIdx = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE)
-                    val wIdx = cursor.getColumnIndex(MediaStore.MediaColumns.WIDTH)
-                    val hIdx = cursor.getColumnIndex(MediaStore.MediaColumns.HEIGHT)
-                    val takenIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_TAKEN)
-                    val addedIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_ADDED)
-                    val bIdIdx = cursor.getColumnIndex(MediaStore.MediaColumns.BUCKET_ID)
-                    val bNameIdx = cursor.getColumnIndex(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
-                    val favIdx =
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            cursor.getColumnIndex(MediaStore.MediaColumns.IS_FAVORITE)
-                        } else {
-                            -1
-                        }
-                    val durIdx =
-                        if (type == MediaType.VIDEO) cursor.getColumnIndex(MediaStore.Video.Media.DURATION) else -1
-
-                    while (cursor.moveToNext()) {
-                        val id = cursor.getLong(idIdx)
-                        out +=
-                            MediaAsset(
-                                id = id,
-                                uri = ContentUris.withAppendedId(baseUri, id),
-                                displayName = cursor.getString(nameIdx) ?: "",
-                                mimeType = cursor.getString(mimeIdx) ?: "",
-                                size = if (sizeIdx >= 0) cursor.getLong(sizeIdx) else 0L,
-                                width = if (wIdx >= 0) cursor.getInt(wIdx) else 0,
-                                height = if (hIdx >= 0) cursor.getInt(hIdx) else 0,
-                                durationMs = if (durIdx >= 0) cursor.getLong(durIdx) else 0L,
-                                capturedAt = if (takenIdx >= 0) cursor.getLong(takenIdx) else 0L,
-                                bucketId = if (bIdIdx >= 0) cursor.getString(bIdIdx) ?: "" else "",
-                                bucketName = if (bNameIdx >= 0) cursor.getString(bNameIdx) ?: "" else "",
-                                isFavorite = if (favIdx >= 0) cursor.getInt(favIdx) != 0 else false,
-                                mediaType = type,
-                                dateAdded = if (addedIdx >= 0) cursor.getLong(addedIdx) else 0L,
-                            )
-                    }
+                .query(baseUri, projectionFor(type), selection, args, SORT)
+                ?.use { cursor ->
+                    val cols = Columns(cursor, type)
+                    while (cursor.moveToNext()) out += cols.read(cursor, baseUri, type)
                 }
         }
-        return out
+        out
+    }
+
+    private fun selectionFor(sinceSec: Long): Pair<String?, Array<String>?> =
+        if (sinceSec > 0) {
+            "${MediaStore.MediaColumns.DATE_ADDED} > ?" to arrayOf(sinceSec.toString())
+        } else {
+            null to null
+        }
+
+    private fun projectionFor(type: MediaType): Array<String> =
+        buildList {
+            add(MediaStore.MediaColumns._ID)
+            add(MediaStore.MediaColumns.DISPLAY_NAME)
+            add(MediaStore.MediaColumns.MIME_TYPE)
+            add(MediaStore.MediaColumns.SIZE)
+            add(MediaStore.MediaColumns.WIDTH)
+            add(MediaStore.MediaColumns.HEIGHT)
+            add(MediaStore.MediaColumns.DATE_TAKEN)
+            add(MediaStore.MediaColumns.DATE_ADDED)
+            add(MediaStore.MediaColumns.BUCKET_ID)
+            add(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                add(MediaStore.MediaColumns.IS_FAVORITE)
+            }
+            if (type == MediaType.VIDEO) add(MediaStore.Video.Media.DURATION)
+        }.toTypedArray()
+
+    /** 游标列索引缓存 + 行解析。 */
+    private class Columns(
+        cursor: Cursor,
+        type: MediaType,
+    ) {
+        private val id = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+        private val name = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+        private val mime = cursor.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE)
+        private val size = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE)
+        private val w = cursor.getColumnIndex(MediaStore.MediaColumns.WIDTH)
+        private val h = cursor.getColumnIndex(MediaStore.MediaColumns.HEIGHT)
+        private val taken = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_TAKEN)
+        private val added = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_ADDED)
+        private val bucketId = cursor.getColumnIndex(MediaStore.MediaColumns.BUCKET_ID)
+        private val bucketName = cursor.getColumnIndex(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
+        private val fav =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                cursor.getColumnIndex(MediaStore.MediaColumns.IS_FAVORITE)
+            } else {
+                -1
+            }
+        private val duration =
+            if (type == MediaType.VIDEO) cursor.getColumnIndex(MediaStore.Video.Media.DURATION) else -1
+
+        fun read(
+            cursor: Cursor,
+            baseUri: Uri,
+            type: MediaType,
+        ): MediaAsset {
+            val idValue = cursor.getLong(id)
+            return MediaAsset(
+                id = idValue,
+                uri = ContentUris.withAppendedId(baseUri, idValue),
+                displayName = cursor.getString(name) ?: "",
+                mimeType = if (mime >= 0) cursor.getString(mime) ?: "" else "",
+                size = if (size >= 0) cursor.getLong(size) else 0L,
+                width = if (w >= 0) cursor.getInt(w) else 0,
+                height = if (h >= 0) cursor.getInt(h) else 0,
+                durationMs = if (duration >= 0) cursor.getLong(duration) else 0L,
+                capturedAt = if (taken >= 0) cursor.getLong(taken) else 0L,
+                bucketId = if (bucketId >= 0) cursor.getString(bucketId) ?: "" else "",
+                bucketName = if (bucketName >= 0) cursor.getString(bucketName) ?: "" else "",
+                isFavorite = if (fav >= 0) cursor.getInt(fav) != 0 else false,
+                mediaType = type,
+                dateAdded = if (added >= 0) cursor.getLong(added) else 0L,
+            )
+        }
+    }
+
+    private companion object {
+        const val SORT = "${MediaStore.MediaColumns.DATE_TAKEN} DESC"
     }
 }

@@ -11,8 +11,9 @@ import androidx.room.RoomDatabase
         AlbumEntity::class,
         AlbumItemEntity::class,
         MediaIndexEntity::class,
+        UserActionLogEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -21,6 +22,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun albumDao(): AlbumDao
 
     abstract fun mediaIndexDao(): MediaIndexDao
+
+    abstract fun userActionLogDao(): UserActionLogDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null

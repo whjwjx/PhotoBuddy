@@ -16,9 +16,9 @@ data class MediaStatusEntity(
 )
 
 /** 用户对单张媒体的整理决策（PRD 4.2）。 */
-enum class MediaStatus(val value: String) {
-    KEEP("keep"),
-    DELETE("delete"),
-    LATER("later"),
-    PERMANENT("permanent"),
+enum class MediaStatus(val value: String, val label: String) {
+    KEEP("keep", "保留"),
+    DELETE("delete", "删除"),
+    LATER("later", "稍后"),
+    PERMANENT("permanent", "永久保留"),
 }
