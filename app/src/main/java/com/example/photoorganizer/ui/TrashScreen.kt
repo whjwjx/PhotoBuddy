@@ -108,7 +108,7 @@ fun TrashScreen(onExit: () -> Unit) {
     val selectedBytes = visibleItems.sumSelectedBytes(selectedIds)
 
     LaunchedEffect(visibleIds) {
-        selectedIds = visibleIds
+        selectedIds = selectedIds.intersect(visibleIds)
     }
 
     val deleteLauncher =
