@@ -719,7 +719,7 @@ private fun SimilarComparisonStrip(
             )
             SimilarGroupAction(
                 label = "保留当前",
-                helper = "其余加入待删除",
+                helper = "其余 ${candidates.size - 1} 张进待删",
                 modifier = Modifier.weight(1f),
                 onClick = onKeepCurrent,
             )
