@@ -70,6 +70,7 @@ import com.example.photoorganizer.domain.StatsService
 fun HomeScreen(
     onStartOrganize: () -> Unit,
     onOpenTrash: () -> Unit,
+    onOpenAlbums: () -> Unit,
 ) {
     val vm: HomeViewModel = viewModel()
     val state by vm.uiState.collectAsState()
@@ -203,6 +204,20 @@ fun HomeScreen(
                 StatPill("整理率", organizedPercent, Modifier.weight(1f))
             }
 
+            HomeEntryGrid(
+                primaryQueue = primaryQueue,
+                onThisDayQueue = homeQueues.firstOrNull { it.type == QueueType.ON_THIS_DAY },
+                monthQueue = homeQueues.firstOrNull { it.type == QueueType.MONTH },
+                albumQueue = homeQueues.firstOrNull { it.type == QueueType.ALBUM },
+                trashCount = state.trashCount,
+                onPickQueue = { queue ->
+                    vm.selectQueue(queue)
+                    onStartOrganize()
+                },
+                onOpenAlbums = onOpenAlbums,
+                onOpenTrash = onOpenTrash,
+            )
+
             TrashEntry(
                 count = state.trashCount,
                 bytes = state.trashBytes,
@@ -266,6 +281,160 @@ fun HomeScreen(
         }
     }
 }
+
+@Composable
+private fun HomeEntryGrid(
+    primaryQueue: MediaQueue?,
+    onThisDayQueue: MediaQueue?,
+    monthQueue: MediaQueue?,
+    albumQueue: MediaQueue?,
+    trashCount: Int,
+    onPickQueue: (MediaQueue) -> Unit,
+    onOpenAlbums: () -> Unit,
+    onOpenTrash: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            HomeEntryCard(
+                label = "Continue",
+                title = primaryQueue?.displayName ?: "继续整理",
+                detail = primaryQueue?.let { "${it.items.size} 项" } ?: "暂无未整理",
+                icon = Icons.Default.AutoAwesome,
+                enabled = primaryQueue?.items?.isNotEmpty() == true,
+                modifier = Modifier.weight(1f),
+                onClick = { primaryQueue?.let(onPickQueue) },
+            )
+            HomeEntryCard(
+                label = "On This Day",
+                title = "往年今日",
+                detail = queueEntryDetail(onThisDayQueue),
+                icon = Icons.Default.Today,
+                enabled = onThisDayQueue?.items?.isNotEmpty() == true,
+                modifier = Modifier.weight(1f),
+                onClick = { onThisDayQueue?.let(onPickQueue) },
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            HomeEntryCard(
+                label = "Monthly",
+                title = monthQueue?.title?.takeIf { it.isNotBlank() } ?: "按月份",
+                detail = queueEntryDetail(monthQueue),
+                icon = Icons.Default.Today,
+                enabled = monthQueue?.items?.isNotEmpty() == true,
+                modifier = Modifier.weight(1f),
+                onClick = { monthQueue?.let(onPickQueue) },
+            )
+            HomeEntryCard(
+                label = "Albums",
+                title = albumQueue?.title?.takeIf { it.isNotBlank() } ?: "按相册",
+                detail =
+                    if (albumQueue?.items?.isNotEmpty() == true) {
+                        "${albumQueue.items.size} 项待整理"
+                    } else {
+                        "管理相册"
+                    },
+                icon = Icons.Default.PhotoAlbum,
+                enabled = true,
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    if (albumQueue?.items?.isNotEmpty() == true) {
+                        onPickQueue(albumQueue)
+                    } else {
+                        onOpenAlbums()
+                    }
+                },
+            )
+        }
+        HomeEntryCard(
+            label = "Trash",
+            title = "待删除复核",
+            detail = if (trashCount > 0) "$trashCount 项待确认" else "当前为空",
+            icon = Icons.Default.DeleteOutline,
+            enabled = trashCount > 0,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onOpenTrash,
+        )
+    }
+}
+
+@Composable
+private fun HomeEntryCard(
+    label: String,
+    title: String,
+    detail: String,
+    icon: ImageVector,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = modifier.clickable(enabled = enabled, onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (enabled) {
+                        MaterialTheme.colorScheme.surface
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+            ),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint =
+                        if (enabled) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                )
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+private fun queueEntryDetail(queue: MediaQueue?): String =
+    if (queue?.items?.isNotEmpty() == true) {
+        "${queue.items.size} 项待整理"
+    } else {
+        "这个入口已完成"
+    }
 
 @Composable
 private fun RecentActivityCard(logs: List<UserActionLogEntity>) {

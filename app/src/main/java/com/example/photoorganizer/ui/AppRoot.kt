@@ -134,6 +134,7 @@ fun AppRoot(
                 AppTab.HOME -> HomeScreen(
                     onStartOrganize = { tab = AppTab.ORGANIZE },
                     onOpenTrash = { tab = AppTab.TRASH },
+                    onOpenAlbums = { tab = AppTab.ALBUMS },
                 )
                 AppTab.ORGANIZE -> FeedScreen(
                     initialQueueTypeName = pendingQueueTypeName,
