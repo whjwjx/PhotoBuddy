@@ -29,6 +29,12 @@ interface AlbumDao {
     @Query("SELECT * FROM album_items WHERE albumId = :albumId ORDER BY addedAt DESC")
     suspend fun getItems(albumId: Long): List<AlbumItemEntity>
 
+    @Query("SELECT COUNT(*) FROM album_items WHERE albumId = :albumId AND mediaId = :mediaId")
+    suspend fun itemCount(
+        albumId: Long,
+        mediaId: Long,
+    ): Int
+
     @Query("UPDATE albums SET name = :name WHERE id = :albumId")
     suspend fun renameAlbum(
         albumId: Long,

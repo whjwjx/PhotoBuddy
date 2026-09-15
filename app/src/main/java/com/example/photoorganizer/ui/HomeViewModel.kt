@@ -43,6 +43,8 @@ data class UndoState(
     val mediaName: String,
     val mediaType: String,
     val beforeStatus: String?,
+    val albumId: Long? = null,
+    val albumItemAdded: Boolean = false,
     val message: String,
     val createdAt: Long,
 )
@@ -417,6 +419,9 @@ class HomeViewModel(
             } else {
                 dao.upsert(restoredStatus)
             }
+            if (undo.albumId != null && undo.albumItemAdded) {
+                albumDao.removeItem(undo.albumId, undo.mediaId)
+            }
             logDao.insert(
                 UserActionLogEntity(
                     mediaId = asset.id,
@@ -552,7 +557,13 @@ class HomeViewModel(
             albumDao.addItem(
                 AlbumItemEntity(albumId = albumId, mediaId = asset.id, addedAt = System.currentTimeMillis()),
             )
-            finishAction(asset, MediaStatus.KEEP, "已新建并加入「$trimmed」")
+            finishAction(
+                asset = asset,
+                status = MediaStatus.ALBUM,
+                message = "已新建并加入「$trimmed」",
+                undoAlbumId = albumId,
+                undoAlbumItemAdded = true,
+            )
         }
     }
 
@@ -561,10 +572,17 @@ class HomeViewModel(
         val asset = _uiState.value.current ?: return
         val albumName = _uiState.value.albums.firstOrNull { it.id == albumId }?.name ?: "相册"
         viewModelScope.launch {
+            val existed = albumDao.itemCount(albumId, asset.id) > 0
             albumDao.addItem(
                 AlbumItemEntity(albumId = albumId, mediaId = asset.id, addedAt = System.currentTimeMillis()),
             )
-            finishAction(asset, MediaStatus.KEEP, "已加入「$albumName」")
+            finishAction(
+                asset = asset,
+                status = MediaStatus.ALBUM,
+                message = "已加入「$albumName」",
+                undoAlbumId = albumId,
+                undoAlbumItemAdded = !existed,
+            )
         }
     }
 
@@ -745,6 +763,9 @@ class HomeViewModel(
         asset: MediaAsset,
         status: MediaStatus,
         message: String = actionMessage(status),
+        logAction: String = status.value,
+        undoAlbumId: Long? = null,
+        undoAlbumItemAdded: Boolean = false,
     ) {
         val now = System.currentTimeMillis()
         val before = dao.get(asset.id)?.status.orEmpty()
@@ -755,6 +776,8 @@ class HomeViewModel(
                 mediaName = asset.displayName,
                 mediaType = asset.mediaType.name,
                 beforeStatus = before.ifEmpty { null },
+                albumId = undoAlbumId,
+                albumItemAdded = undoAlbumItemAdded,
                 message = message,
                 createdAt = now,
             )
@@ -776,7 +799,7 @@ class HomeViewModel(
                 mediaId = asset.id,
                 mediaName = asset.displayName,
                 mediaType = asset.mediaType.name,
-                action = status.value,
+                action = logAction,
                 source = source,
                 beforeState = before,
                 afterState = status.value,
@@ -808,6 +831,7 @@ class HomeViewModel(
         when (status) {
             MediaStatus.TRASH -> "已加入待删除"
             MediaStatus.KEEP -> "已保留"
+            MediaStatus.ALBUM -> "已归类"
             MediaStatus.LATER -> "已标记稍后"
             MediaStatus.FAVORITE -> "已收藏"
             MediaStatus.DELETE -> "已删除"

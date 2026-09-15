@@ -29,6 +29,7 @@ internal fun formatDuration(ms: Long): String {
 internal fun actionLabel(log: UserActionLogEntity): String =
     when (log.action) {
         "keep" -> "已保留"
+        "album" -> "已归类"
         "later" -> "稍后"
         "trash" -> "待删除"
         "favorite" -> "已收藏"

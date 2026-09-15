@@ -18,6 +18,7 @@ data class MediaStatusEntity(
 /** 用户对单张媒体的整理决策（PRD 4.2）。 */
 enum class MediaStatus(val value: String, val label: String) {
     KEEP("keep", "保留"),
+    ALBUM("album", "已归类"),
     TRASH("trash", "待删除"),
     DELETE("delete", "已删除"),
     LATER("later", "稍后"),
