@@ -16,16 +16,18 @@ import java.util.Locale
 
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
-/** 整理与删除安全策略（PRD 六·设置 / 11.4 误删风险）。 */
+/** 整理节奏设置（PRD 六·设置）。 */
 data class OrganizeSettings(
-    /** 收藏内容默认不进入批量删除候选。 */
-    val protectFavorite: Boolean = true,
-    /** 最近 N 天拍摄的内容默认不进入批量删除候选，0 表示不保护。 */
-    val protectRecentDays: Int = 7,
-    /** 批量删除分批大小，避免系统请求 URI 数量上限（PRD 8.2.1）。 */
-    val batchChunkSize: Int = 50,
     /** 每日整理目标数量。 */
     val dailyGoal: Int = 20,
+    /** 是否开启每日整理提醒。 */
+    val reminderEnabled: Boolean = false,
+    /** 整理提醒最小间隔天数。 */
+    val reminderIntervalDays: Int = 1,
+    /** 静默开始小时（0-23）。 */
+    val quietStartHour: Int = 22,
+    /** 静默结束小时（0-23）。 */
+    val quietEndHour: Int = 8,
 )
 
 /** 每日整理任务进度（PRD 4.1 / 阶段 4）。 */
@@ -40,22 +42,30 @@ class SettingsRepository(
     private val context: Context,
 ) {
     private object Keys {
-        val PROTECT_FAVORITE = booleanPreferencesKey("protect_favorite")
-        val PROTECT_RECENT_DAYS = intPreferencesKey("protect_recent_days")
-        val BATCH_CHUNK = intPreferencesKey("batch_chunk")
         val DAILY_GOAL = intPreferencesKey("daily_goal")
         val LAST_SCAN_MS = longPreferencesKey("last_scan_ms")
         val DAILY_DATE = stringPreferencesKey("daily_date")
         val DAILY_COUNT = intPreferencesKey("daily_count")
+        val PINNED_ALBUM_IDS = stringPreferencesKey("pinned_album_ids")
+        val HIDDEN_ALBUM_IDS = stringPreferencesKey("hidden_album_ids")
+        val ALBUM_ORDER_IDS = stringPreferencesKey("album_order_ids")
+        val FEED_ACTION_BAR_EXPANDED = booleanPreferencesKey("feed_action_bar_expanded")
+        val FEED_GESTURE_GUIDE_SEEN = booleanPreferencesKey("feed_gesture_guide_seen")
+        val REMINDER_ENABLED = booleanPreferencesKey("reminder_enabled")
+        val REMINDER_INTERVAL_DAYS = intPreferencesKey("reminder_interval_days")
+        val QUIET_START_HOUR = intPreferencesKey("quiet_start_hour")
+        val QUIET_END_HOUR = intPreferencesKey("quiet_end_hour")
+        val LAST_REMINDER_DATE = stringPreferencesKey("last_reminder_date")
     }
 
     val settings: Flow<OrganizeSettings> =
         context.settingsDataStore.data.map { p ->
             OrganizeSettings(
-                protectFavorite = p[Keys.PROTECT_FAVORITE] ?: true,
-                protectRecentDays = p[Keys.PROTECT_RECENT_DAYS] ?: 7,
-                batchChunkSize = p[Keys.BATCH_CHUNK] ?: 50,
                 dailyGoal = p[Keys.DAILY_GOAL] ?: 20,
+                reminderEnabled = p[Keys.REMINDER_ENABLED] ?: false,
+                reminderIntervalDays = (p[Keys.REMINDER_INTERVAL_DAYS] ?: 1).coerceAtLeast(1),
+                quietStartHour = (p[Keys.QUIET_START_HOUR] ?: 22).coerceIn(0, 23),
+                quietEndHour = (p[Keys.QUIET_END_HOUR] ?: 8).coerceIn(0, 23),
             )
         }
 
@@ -69,20 +79,84 @@ class SettingsRepository(
             }
         }
 
-    suspend fun setProtectFavorite(v: Boolean) {
-        context.settingsDataStore.edit { it[Keys.PROTECT_FAVORITE] = v }
-    }
+    val pinnedAlbumIds: Flow<Set<Long>> =
+        context.settingsDataStore.data.map { p -> parseIdSet(p[Keys.PINNED_ALBUM_IDS].orEmpty()) }
 
-    suspend fun setProtectRecentDays(v: Int) {
-        context.settingsDataStore.edit { it[Keys.PROTECT_RECENT_DAYS] = v }
-    }
+    val hiddenAlbumIds: Flow<Set<Long>> =
+        context.settingsDataStore.data.map { p -> parseIdSet(p[Keys.HIDDEN_ALBUM_IDS].orEmpty()) }
 
-    suspend fun setBatchChunk(v: Int) {
-        context.settingsDataStore.edit { it[Keys.BATCH_CHUNK] = v }
-    }
+    val albumOrderIds: Flow<List<Long>> =
+        context.settingsDataStore.data.map { p -> parseIdList(p[Keys.ALBUM_ORDER_IDS].orEmpty()) }
+
+    val feedActionBarExpanded: Flow<Boolean> =
+        context.settingsDataStore.data.map { p -> p[Keys.FEED_ACTION_BAR_EXPANDED] ?: false }
+
+    val feedGestureGuideSeen: Flow<Boolean> =
+        context.settingsDataStore.data.map { p -> p[Keys.FEED_GESTURE_GUIDE_SEEN] ?: false }
 
     suspend fun setDailyGoal(v: Int) {
         context.settingsDataStore.edit { it[Keys.DAILY_GOAL] = v }
+    }
+
+    suspend fun setReminderEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.REMINDER_ENABLED] = enabled }
+    }
+
+    suspend fun setReminderIntervalDays(days: Int) {
+        context.settingsDataStore.edit { it[Keys.REMINDER_INTERVAL_DAYS] = days.coerceAtLeast(1) }
+    }
+
+    suspend fun setQuietHours(
+        startHour: Int,
+        endHour: Int,
+    ) {
+        context.settingsDataStore.edit { p ->
+            p[Keys.QUIET_START_HOUR] = startHour.coerceIn(0, 23)
+            p[Keys.QUIET_END_HOUR] = endHour.coerceIn(0, 23)
+        }
+    }
+
+    suspend fun getLastReminderDate(): String =
+        context.settingsDataStore.data.first()[Keys.LAST_REMINDER_DATE].orEmpty()
+
+    suspend fun markReminderPosted() {
+        context.settingsDataStore.edit { it[Keys.LAST_REMINDER_DATE] = today() }
+    }
+
+    suspend fun setAlbumPinned(
+        albumId: Long,
+        pinned: Boolean,
+    ) {
+        context.settingsDataStore.edit { p ->
+            val current = parseIdSet(p[Keys.PINNED_ALBUM_IDS].orEmpty())
+            val next = if (pinned) current + albumId else current - albumId
+            p[Keys.PINNED_ALBUM_IDS] = next.sorted().joinToString(",")
+        }
+    }
+
+    suspend fun setAlbumHidden(
+        albumId: Long,
+        hidden: Boolean,
+    ) {
+        context.settingsDataStore.edit { p ->
+            val current = parseIdSet(p[Keys.HIDDEN_ALBUM_IDS].orEmpty())
+            val next = if (hidden) current + albumId else current - albumId
+            p[Keys.HIDDEN_ALBUM_IDS] = next.sorted().joinToString(",")
+        }
+    }
+
+    suspend fun setAlbumOrderIds(albumIds: List<Long>) {
+        context.settingsDataStore.edit { p ->
+            p[Keys.ALBUM_ORDER_IDS] = albumIds.distinct().joinToString(",")
+        }
+    }
+
+    suspend fun setFeedActionBarExpanded(expanded: Boolean) {
+        context.settingsDataStore.edit { p -> p[Keys.FEED_ACTION_BAR_EXPANDED] = expanded }
+    }
+
+    suspend fun setFeedGestureGuideSeen(seen: Boolean) {
+        context.settingsDataStore.edit { p -> p[Keys.FEED_GESTURE_GUIDE_SEEN] = seen }
     }
 
     suspend fun getLastScanMs(): Long = context.settingsDataStore.data.first()[Keys.LAST_SCAN_MS] ?: 0L
@@ -96,9 +170,26 @@ class SettingsRepository(
         context.settingsDataStore.edit { p ->
             val cur = if (p[Keys.DAILY_DATE] == today()) p[Keys.DAILY_COUNT] ?: 0 else 0
             p[Keys.DAILY_DATE] = today()
-            p[Keys.DAILY_COUNT] = cur + n
+            p[Keys.DAILY_COUNT] = (cur + n).coerceAtLeast(0)
+        }
+    }
+
+    /** 测试用：重置今日整理计数，让有限素材可以反复跑完整流程。 */
+    suspend fun resetDaily() {
+        context.settingsDataStore.edit { p ->
+            p[Keys.DAILY_DATE] = today()
+            p[Keys.DAILY_COUNT] = 0
         }
     }
 
     private fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+    private fun parseIdSet(raw: String): Set<Long> =
+        parseIdList(raw).toSet()
+
+    private fun parseIdList(raw: String): List<Long> =
+        raw
+            .split(",")
+            .mapNotNull { it.trim().toLongOrNull() }
+            .distinct()
 }

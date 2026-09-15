@@ -1,5 +1,13 @@
 package com.example.photoorganizer.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -7,93 +15,1041 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PhotoAlbum
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.RemoveCircleOutline
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.photoorganizer.data.MediaAsset
+import com.example.photoorganizer.data.local.AlbumEntity
+import com.example.photoorganizer.data.local.MediaStatus
 
-/** 相册页：应用内自定义相册分组（PRD 六·相册 / 5.6 / 8.2.1）。 */
+private val STARTER_ALBUM_NAMES = listOf("家人", "朋友", "旅行", "资料", "美食", "截图")
+
+private data class SystemAlbumOption(
+    val key: String,
+    val name: String,
+    val count: Int,
+    val pendingCount: Int,
+)
+
+/** 应用内相册页：负责查看、重命名、移除相册映射，以及从相册中批量移出媒体。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumsScreen() {
+    AlbumsScreen(onStartOrganize = {})
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AlbumsScreen(onStartOrganize: () -> Unit) {
     val vm: HomeViewModel = viewModel()
     val state by vm.uiState.collectAsState()
     var name by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
+    var renameTarget by remember { mutableStateOf<AlbumEntity?>(null) }
+    var deleteTarget by remember { mutableStateOf<AlbumEntity?>(null) }
+    var mergeTarget by remember { mutableStateOf<AlbumEntity?>(null) }
+    var previewTarget by remember { mutableStateOf<MediaAsset?>(null) }
+    var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     val openAlbum = state.albums.firstOrNull { it.id == state.openAlbumId }
+    val openItems =
+        openAlbum
+            ?.let { album -> state.openAlbumMediaIds.mapNotNull { id -> state.allAssets.firstOrNull { it.id == id } } }
+            .orEmpty()
+    val systemAlbumOptions =
+        remember(state.allAssets, state.statusById) {
+            val blockedStatuses = setOf(MediaStatus.TRASH.value, MediaStatus.DELETE.value)
+            state.allAssets
+                .groupBy { asset -> asset.bucketId.ifBlank { asset.bucketName.ifBlank { "unknown" } } }
+                .map { (key, assets) ->
+                    SystemAlbumOption(
+                        key = key,
+                        name = assets.firstOrNull()?.bucketName?.ifBlank { "未知相册" } ?: "未知相册",
+                        count = assets.size,
+                        pendingCount =
+                            assets.count { asset ->
+                                val status = state.statusById[asset.id].orEmpty()
+                                status.isBlank() && status !in blockedStatuses
+                            },
+                    )
+                }
+                .sortedWith(
+                    compareByDescending<SystemAlbumOption> { it.pendingCount }
+                        .thenByDescending { it.count }
+                        .thenBy { it.name },
+                )
+        }
+
+    LaunchedEffect(openAlbum?.id, openItems.map { it.id }) {
+        selectedIds = selectedIds.intersect(openItems.map { it.id }.toSet())
+    }
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CompactTopAppBar(
                 title = { Text(openAlbum?.name ?: "相册") },
                 navigationIcon = {
                     if (openAlbum != null) {
                         TextButton(onClick = { vm.closeAlbum() }) { Text("返回") }
                     }
                 },
+                actions = {
+                    if (openAlbum != null) {
+                        IconButton(onClick = { mergeTarget = openAlbum }) {
+                            Icon(Icons.Default.PhotoAlbum, contentDescription = "合并相册")
+                        }
+                        IconButton(onClick = { renameTarget = openAlbum }) {
+                            Icon(Icons.Default.Edit, contentDescription = "重命名")
+                        }
+                        IconButton(onClick = { deleteTarget = openAlbum }) {
+                            Icon(Icons.Default.DeleteOutline, contentDescription = "移除相册映射")
+                        }
+                    }
+                },
             )
         },
     ) { padding ->
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp),
-        ) {
-            if (openAlbum != null) {
-                val items: List<MediaAsset> =
-                    state.openAlbumMediaIds.mapNotNull { id ->
-                        state.allAssets.firstOrNull { it.id == id }
+        if (openAlbum == null) {
+            AlbumList(
+                state = state,
+                draftName = name,
+                query = query,
+                systemAlbumOptions = systemAlbumOptions,
+                onDraftChange = { name = it },
+                onQueryChange = { query = it },
+                onCreate = {
+                    vm.createAlbum(name)
+                    name = ""
+                },
+                onCreateName = { suggestedName ->
+                    vm.createAlbum(suggestedName)
+                    name = ""
+                },
+                onOpen = { vm.openAlbum(it) },
+                onRename = { renameTarget = it },
+                onDelete = { deleteTarget = it },
+                onMerge = { mergeTarget = it },
+                onTogglePin = { albumId, pinned -> vm.setAlbumPinned(albumId, pinned) },
+                onToggleHidden = { albumId, hidden -> vm.setAlbumHidden(albumId, hidden) },
+                onOrganizeSystemAlbum = { option ->
+                    vm.selectSystemAlbumQueue(option.key, option.name)
+                    onStartOrganize()
+                },
+                onImportSystemAlbum = { option -> vm.importSystemAlbum(option.key, option.name) },
+                modifier = Modifier.padding(padding),
+            )
+        } else {
+            AlbumDetail(
+                album = openAlbum,
+                items = openItems,
+                selectedIds = selectedIds,
+                onToggle = { id ->
+                    selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
+                },
+                onPreview = { previewTarget = it },
+                onSelectAll = {
+                    selectedIds =
+                        if (selectedIds.size == openItems.size) {
+                            emptySet()
+                        } else {
+                            openItems.map { it.id }.toSet()
+                        }
+                },
+                onRemoveSelected = {
+                    vm.removeFromAlbum(openAlbum.id, selectedIds)
+                    selectedIds = emptySet()
+                },
+                modifier = Modifier.padding(padding),
+            )
+        }
+    }
+
+    val albumForPreview = openAlbum
+    val previewAsset = previewTarget
+    if (albumForPreview != null && previewAsset != null) {
+        AlbumMediaPreviewDialog(
+            albumName = albumForPreview.name,
+            asset = previewAsset,
+            selected = previewAsset.id in selectedIds,
+            onToggleSelected = {
+                selectedIds =
+                    if (previewAsset.id in selectedIds) {
+                        selectedIds - previewAsset.id
+                    } else {
+                        selectedIds + previewAsset.id
                     }
-                if (items.isEmpty()) {
-                    Text("这个相册还没有内容，去整理页用「加入相册」添加吧。")
+            },
+            onRemove = {
+                vm.removeFromAlbum(albumForPreview.id, previewAsset.id)
+                selectedIds = selectedIds - previewAsset.id
+                previewTarget = null
+            },
+            onDismiss = { previewTarget = null },
+        )
+    }
+
+    renameTarget?.let { album ->
+        RenameAlbumDialog(
+            album = album,
+            albums = state.albums,
+            onConfirm = { newName ->
+                vm.renameAlbum(album.id, newName)
+                renameTarget = null
+            },
+            onDismiss = { renameTarget = null },
+        )
+    }
+
+    deleteTarget?.let { album ->
+        DeleteAlbumDialog(
+            album = album,
+            count = state.albumCounts[album.id] ?: 0,
+            onConfirm = {
+                vm.deleteAlbum(album.id)
+                deleteTarget = null
+            },
+            onDismiss = { deleteTarget = null },
+        )
+    }
+
+    mergeTarget?.let { album ->
+        MergeAlbumDialog(
+            album = album,
+            albums = state.albums,
+            count = state.albumCounts[album.id] ?: 0,
+            onConfirm = { targetAlbumId ->
+                vm.mergeAlbum(album.id, targetAlbumId)
+                mergeTarget = null
+            },
+            onDismiss = { mergeTarget = null },
+        )
+    }
+}
+
+@Composable
+private fun AlbumList(
+    state: HomeUiState,
+    draftName: String,
+    query: String,
+    systemAlbumOptions: List<SystemAlbumOption>,
+    onDraftChange: (String) -> Unit,
+    onQueryChange: (String) -> Unit,
+    onCreate: () -> Unit,
+    onCreateName: (String) -> Unit,
+    onOpen: (Long) -> Unit,
+    onRename: (AlbumEntity) -> Unit,
+    onDelete: (AlbumEntity) -> Unit,
+    onMerge: (AlbumEntity) -> Unit,
+    onTogglePin: (Long, Boolean) -> Unit,
+    onToggleHidden: (Long, Boolean) -> Unit,
+    onOrganizeSystemAlbum: (SystemAlbumOption) -> Unit,
+    onImportSystemAlbum: (SystemAlbumOption) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var showSystemAlbumPicker by remember { mutableStateOf(false) }
+    val trimmedDraftName = draftName.trim()
+    val hasSameNameAlbum =
+        trimmedDraftName.isNotEmpty() &&
+            state.albums.any { it.name.equals(trimmedDraftName, ignoreCase = true) }
+    val sortedAlbums =
+        remember(
+            state.albums,
+            state.albumCounts,
+            state.albumLastAddedAt,
+            state.pinnedAlbumIds,
+            state.hiddenAlbumIds,
+        ) {
+            sortAlbumsForManagement(
+                albums = state.albums,
+                counts = state.albumCounts,
+                lastAddedAt = state.albumLastAddedAt,
+                pinnedAlbumIds = state.pinnedAlbumIds,
+                hiddenAlbumIds = state.hiddenAlbumIds,
+            )
+        }
+    val visibleAlbums =
+        sortedAlbums.filter { album ->
+            query.isBlank() || album.name.contains(query.trim(), ignoreCase = true)
+        }
+    val totalClassified = state.albumCounts.values.sum()
+    val pinnedCount = state.pinnedAlbumIds.count { id -> state.albums.any { it.id == id } }
+    val hiddenCount = state.hiddenAlbumIds.count { id -> state.albums.any { it.id == id } }
+    Column(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            placeholder = { Text("搜索相册") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        AlbumManagementSummary(
+            albumCount = state.albums.size,
+            totalClassified = totalClassified,
+            pinnedCount = pinnedCount,
+            hiddenCount = hiddenCount,
+            systemAlbumCount = systemAlbumOptions.size,
+            onImportSystemAlbum = { showSystemAlbumPicker = true },
+        )
+
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            if (state.albums.isEmpty()) {
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EmptyAlbums(Modifier.weight(1f))
+                    CreateAlbumCard(
+                        draftName = draftName,
+                        trimmedDraftName = trimmedDraftName,
+                        hasSameNameAlbum = hasSameNameAlbum,
+                        showStarterAlbums = trimmedDraftName.isEmpty(),
+                        onDraftChange = onDraftChange,
+                        onCreate = onCreate,
+                        onCreateName = onCreateName,
+                    )
+                }
+            } else if (visibleAlbums.isEmpty()) {
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EmptyAlbumSearch(query = query, modifier = Modifier.weight(1f))
+                    CreateAlbumCard(
+                        draftName = draftName,
+                        trimmedDraftName = trimmedDraftName,
+                        hasSameNameAlbum = hasSameNameAlbum,
+                        showStarterAlbums = false,
+                        onDraftChange = onDraftChange,
+                        onCreate = onCreate,
+                        onCreateName = onCreateName,
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(visibleAlbums, key = { it.id }) { album ->
+                        val cover = state.albumMediaIds[album.id]?.firstNotNullOfOrNull { id ->
+                            state.allAssets.firstOrNull { it.id == id }
+                        }
+                        AlbumRow(
+                            album = album,
+                            cover = cover,
+                            count = state.albumCounts[album.id] ?: 0,
+                            lastAddedAt = state.albumLastAddedAt[album.id] ?: 0L,
+                            pinned = album.id in state.pinnedAlbumIds,
+                            hidden = album.id in state.hiddenAlbumIds,
+                            onOpen = { onOpen(album.id) },
+                            onRename = { onRename(album) },
+                            onDelete = { onDelete(album) },
+                            onMerge = { onMerge(album) },
+                            onTogglePin = { onTogglePin(album.id, album.id !in state.pinnedAlbumIds) },
+                            onToggleHidden = { onToggleHidden(album.id, album.id !in state.hiddenAlbumIds) },
+                        )
+                    }
+                    item {
+                        CreateAlbumCard(
+                            draftName = draftName,
+                            trimmedDraftName = trimmedDraftName,
+                            hasSameNameAlbum = hasSameNameAlbum,
+                            showStarterAlbums = false,
+                            onDraftChange = onDraftChange,
+                            onCreate = onCreate,
+                            onCreateName = onCreateName,
+                        )
+                    }
+                }
+            }
+        }
+    }
+    if (showSystemAlbumPicker) {
+        SystemAlbumImportDialog(
+            options = systemAlbumOptions,
+            onOrganize = { option ->
+                onOrganizeSystemAlbum(option)
+                showSystemAlbumPicker = false
+            },
+            onImport = { option ->
+                onImportSystemAlbum(option)
+                showSystemAlbumPicker = false
+            },
+            onDismiss = { showSystemAlbumPicker = false },
+        )
+    }
+}
+
+@Composable
+private fun CreateAlbumCard(
+    draftName: String,
+    trimmedDraftName: String,
+    hasSameNameAlbum: Boolean,
+    showStarterAlbums: Boolean,
+    onDraftChange: (String) -> Unit,
+    onCreate: () -> Unit,
+    onCreateName: (String) -> Unit,
+) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = draftName,
+                    onValueChange = onDraftChange,
+                    placeholder = { Text("新建相册") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                Button(
+                    onClick = onCreate,
+                    enabled = trimmedDraftName.isNotEmpty() && !hasSameNameAlbum,
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Text(if (hasSameNameAlbum) "已存在" else "新建")
+                }
+            }
+            if (hasSameNameAlbum) {
+                Text(
+                    "已有同名相册，可以直接打开使用。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (showStarterAlbums) {
+                StarterAlbumSuggestions(onCreateName = onCreateName)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumManagementSummary(
+    albumCount: Int,
+    totalClassified: Int,
+    pinnedCount: Int,
+    hiddenCount: Int,
+    systemAlbumCount: Int,
+    onImportSystemAlbum: () -> Unit,
+) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("本地相册映射", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "$albumCount 个映射 · $totalClassified 项记录 · $pinnedCount 个置顶 · $hiddenCount 个隐藏",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    "只记录 App 内映射，不改系统相册。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            OutlinedButton(
+                onClick = onImportSystemAlbum,
+                enabled = systemAlbumCount > 0,
+                modifier = Modifier.height(36.dp),
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Text("导入 · $systemAlbumCount")
+            }
+        }
+    }
+}
+
+@Composable
+private fun SystemAlbumImportDialog(
+    options: List<SystemAlbumOption>,
+    onOrganize: (SystemAlbumOption) -> Unit,
+    onImport: (SystemAlbumOption) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("导入系统相册映射") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "选择系统相册后，会在 App 内创建同名映射并导入归类记录；不会移动、重命名或修改系统相册文件。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (options.isEmpty()) {
+                    Text("没有可导入的系统相册。", style = MaterialTheme.typography.bodyMedium)
                 } else {
-                    Text("共 ${items.size} 项", style = MaterialTheme.typography.labelLarge)
-                    Spacer(Modifier.height(8.dp))
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(3),
-                        modifier = Modifier.fillMaxSize(),
+                    LazyColumn(
+                        modifier = Modifier.height(320.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        items(items) { a ->
-                            Card(Modifier.padding(4.dp)) {
-                                Column(Modifier.padding(4.dp)) {
-                                    AsyncImage(
-                                        model = a.uri,
-                                        contentDescription = a.displayName,
-                                        modifier = Modifier.fillMaxWidth().height(90.dp),
-                                        contentScale = ContentScale.Crop,
+                        items(options, key = { it.key }) { option ->
+                            val canOrganize = option.pendingCount > 0
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        option.name,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
-                                    TextButton(onClick = { vm.removeFromAlbum(openAlbum.id, a.id) }) {
-                                        Text("移除")
-                                    }
+                                    Text(
+                                        "${option.count} 项 · ${option.pendingCount} 项待整理 · 可导入为本地映射",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                TextButton(
+                                    onClick = { onOrganize(option) },
+                                    enabled = canOrganize,
+                                ) {
+                                    Icon(
+                                        Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(Modifier.width(2.dp))
+                                    Text("按此整理")
+                                }
+                                TextButton(onClick = { onImport(option) }) {
+                                    Text("导入映射")
                                 }
                             }
                         }
                     }
                 }
-            } else {
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+@Composable
+private fun StarterAlbumSuggestions(
+    onCreateName: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "快速开始",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(STARTER_ALBUM_NAMES) { name ->
+                OutlinedButton(onClick = { onCreateName(name) }, shape = RoundedCornerShape(50)) {
+                    Text(name, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun AlbumRow(
+    album: AlbumEntity,
+    cover: MediaAsset?,
+    count: Int,
+    lastAddedAt: Long,
+    pinned: Boolean,
+    hidden: Boolean,
+    onOpen: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    onMerge: () -> Unit,
+    onTogglePin: () -> Unit,
+    onToggleHidden: () -> Unit,
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    Card(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = onOpen,
+                    onLongClick = { menuExpanded = true },
+                ),
+        shape = RoundedCornerShape(8.dp),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            AlbumCover(cover = cover, modifier = Modifier.size(58.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    album.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    buildString {
+                        append("$count 项")
+                        if (lastAddedAt > 0) {
+                            append(" · 最近 ${formatDate(lastAddedAt)}")
+                        } else {
+                            append(" · 待归类")
+                        }
+                        if (pinned) append(" · 已置顶")
+                        if (hidden) append(" · 快捷区隐藏")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Box {
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "管理相册")
+                }
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text(if (pinned) "取消置顶" else "置顶到整理页") },
+                        onClick = {
+                            menuExpanded = false
+                            onTogglePin()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (hidden) "显示在整理页" else "从整理页隐藏") },
+                        onClick = {
+                            menuExpanded = false
+                            onToggleHidden()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("重命名") },
+                        onClick = {
+                            menuExpanded = false
+                            onRename()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("合并到…") },
+                        onClick = {
+                            menuExpanded = false
+                            onMerge()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("移除本地映射") },
+                        onClick = {
+                            menuExpanded = false
+                            onDelete()
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumCover(
+    cover: MediaAsset?,
+    modifier: Modifier = Modifier,
+) {
+    if (cover == null) {
+        Box(
+            modifier.background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Default.PhotoAlbum, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    } else {
+        AsyncImage(
+            model = cover.uri,
+            contentDescription = cover.displayName,
+            modifier = modifier,
+            contentScale = ContentScale.Crop,
+        )
+    }
+}
+
+@Composable
+private fun AlbumDetail(
+    album: AlbumEntity,
+    items: List<MediaAsset>,
+    selectedIds: Set<Long>,
+    onToggle: (Long) -> Unit,
+    onPreview: (MediaAsset) -> Unit,
+    onSelectAll: () -> Unit,
+    onRemoveSelected: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
+            Row(
+                Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("本地映射 · ${items.size} 项", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (selectedIds.isEmpty()) {
+                            "移出只取消归类，不会删除原照片"
+                        } else {
+                            "已选 ${selectedIds.size} 项"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (items.isNotEmpty()) {
+                    TextButton(onClick = onSelectAll) {
+                        Text(if (selectedIds.size == items.size) "全不选" else "全选")
+                    }
+                }
+                if (items.isNotEmpty()) {
+                    OutlinedButton(onClick = onRemoveSelected, enabled = selectedIds.isNotEmpty()) {
+                        Icon(
+                            Icons.Default.RemoveCircleOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("移出")
+                    }
+                }
+            }
+        }
+
+        if (items.isEmpty()) {
+            EmptyAlbum(album.name, Modifier.fillMaxSize())
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                items(items, key = { it.id }) { asset ->
+                    AlbumMediaTile(
+                        asset = asset,
+                        selected = asset.id in selectedIds,
+                        onOpen = { onPreview(asset) },
+                        onToggle = { onToggle(asset.id) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumMediaTile(
+    asset: MediaAsset,
+    selected: Boolean,
+    onOpen: () -> Unit,
+    onToggle: () -> Unit,
+) {
+    val shape = RoundedCornerShape(8.dp)
+    Card(
+        modifier =
+            Modifier
+                .clickable(onClick = onOpen)
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color =
+                        if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                        },
+                    shape = shape,
+                ),
+        shape = shape,
+    ) {
+        Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
+            AsyncImage(
+                model = asset.uri,
+                contentDescription = asset.displayName,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+            if (selected) {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)))
+            }
+            AlbumSelectionBadge(
+                selected = selected,
+                onClick = onToggle,
+                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AlbumSelectionBadge(
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .size(28.dp)
+                .background(Color.White.copy(alpha = 0.92f), CircleShape)
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (selected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+            contentDescription = if (selected) "取消选择" else "选择",
+            tint =
+                if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            modifier = Modifier.size(22.dp),
+        )
+    }
+}
+
+@Composable
+private fun AlbumMediaPreviewDialog(
+    albumName: String,
+    asset: MediaAsset,
+    selected: Boolean,
+    onToggleSelected: () -> Unit,
+    onRemove: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(asset.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    "来自「$albumName」",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AsyncImage(
+                    model = asset.uri,
+                    contentDescription = asset.displayName,
+                    modifier = Modifier.fillMaxWidth().height(320.dp),
+                    contentScale = ContentScale.Fit,
+                )
+                Text(
+                    buildString {
+                        append(formatBytes(asset.size))
+                        if (asset.capturedAt > 0) append(" · ${formatDate(asset.capturedAt)}")
+                        if (asset.bucketName.isNotEmpty()) append(" · ${asset.bucketName}")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "移出只会取消归类，不会删除照片文件。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onRemove) {
+                Text("移出相册")
+            }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onToggleSelected) {
+                    Text(if (selected) "取消选择" else "选择")
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("关闭")
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun EmptyAlbumSearch(
+    query: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("没有找到「$query」", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "可以换个关键词，或者用上方输入框新建相册。",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun EmptyAlbums(
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("还没有相册", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "在整理页加入相册，或者先创建一个常用分类。",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+private fun sortAlbumsForManagement(
+    albums: List<AlbumEntity>,
+    counts: Map<Long, Int>,
+    lastAddedAt: Map<Long, Long>,
+    pinnedAlbumIds: Set<Long>,
+    hiddenAlbumIds: Set<Long>,
+): List<AlbumEntity> =
+    albums.sortedWith(
+        compareByDescending<AlbumEntity> { if (it.id in pinnedAlbumIds) 1 else 0 }
+            .thenBy { if (it.id in hiddenAlbumIds) 1 else 0 }
+            .thenByDescending { lastAddedAt[it.id] ?: 0L }
+            .thenByDescending { counts[it.id] ?: 0 }
+            .thenByDescending { it.createdAt }
+            .thenBy { it.name },
+    )
+
+@Composable
+private fun EmptyAlbum(
+    albumName: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier.padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("「$albumName」暂无内容", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "去整理页把照片加入这个相册。",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun RenameAlbumDialog(
+    album: AlbumEntity,
+    albums: List<AlbumEntity>,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var name by remember(album.id) { mutableStateOf(album.name) }
+    val trimmedName = name.trim()
+    val hasSameNameAlbum =
+        trimmedName.isNotEmpty() &&
+            albums.any { it.id != album.id && it.name.equals(trimmedName, ignoreCase = true) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("重命名相册") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -101,33 +1057,110 @@ fun AlbumsScreen() {
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = {
-                    vm.createAlbum(name)
-                    name = ""
-                }) { Text("新建相册") }
+                if (hasSameNameAlbum) {
+                    Text(
+                        "已有同名相册，请换一个名称。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(name) },
+                enabled = trimmedName.isNotEmpty() && !hasSameNameAlbum,
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
 
-                Spacer(Modifier.height(16.dp))
-                if (state.albums.isEmpty()) {
-                    Text("还没有相册。")
+@Composable
+private fun MergeAlbumDialog(
+    album: AlbumEntity,
+    albums: List<AlbumEntity>,
+    count: Int,
+    onConfirm: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val targetAlbums = albums.filter { it.id != album.id }.sortedBy { it.name }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("合并「${album.name}」") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "会把 $count 条归类记录合并到目标相册，然后删除「${album.name}」。不会删除照片文件。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (targetAlbums.isEmpty()) {
+                    Text(
+                        "还没有其它相册可合并。请先新建一个目标相册。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 } else {
-                    LazyColumn {
-                        items(state.albums) { a ->
-                            Row(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 6.dp),
+                    LazyColumn(
+                        modifier = Modifier.height(220.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        items(targetAlbums, key = { it.id }) { target ->
+                            TextButton(
+                                onClick = { onConfirm(target.id) },
+                                modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Column(Modifier.fillMaxWidth(0.55f)) {
-                                    Text(a.name, style = MaterialTheme.typography.titleMedium)
-                                    Text("${state.albumCounts[a.id] ?: 0} 项")
-                                }
-                                TextButton(onClick = { vm.openAlbum(a.id) }) { Text("查看") }
+                                Text(
+                                    "合并到「${target.name}」",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
                         }
                     }
                 }
             }
-        }
-    }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+    )
+}
+
+@Composable
+private fun DeleteAlbumDialog(
+    album: AlbumEntity,
+    count: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("移除「${album.name}」本地映射？") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "只会移除这个 App 内映射和其中 $count 条归类记录。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "不会删除照片文件，也不会删除系统相册；之后仍可从系统相册或“导入系统相册映射”重新导入。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("移除映射")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }

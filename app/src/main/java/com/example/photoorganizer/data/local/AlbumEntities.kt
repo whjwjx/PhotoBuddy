@@ -5,7 +5,7 @@ import androidx.room.PrimaryKey
 
 /**
  * 应用内自定义相册（PRD 5.6 / 8.2.1）。
- * 说明：Android 上「加入系统相册」不是强一致能力，MVP 只做应用内分组。
+ * 说明：当前只做应用内分组，不修改系统相册；后续同步系统图库需单独设计批量授权体验。
  */
 @Entity(tableName = "albums")
 data class AlbumEntity(

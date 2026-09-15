@@ -1,35 +1,38 @@
 package com.example.photoorganizer.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import com.example.photoorganizer.data.local.AlbumEntity
+import com.example.photoorganizer.data.MediaType
+import com.example.photoorganizer.domain.MediaQueue
+import com.example.photoorganizer.domain.QueueType
 
 @Composable
 internal fun FilterChipButton(
@@ -37,164 +40,342 @@ internal fun FilterChipButton(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    Button(
+    AssistChip(
         onClick = onClick,
+        label = { Text(text) },
         colors =
-            ButtonDefaults.buttonColors(
+            AssistChipDefaults.assistChipColors(
                 containerColor =
                     if (selected) {
                         MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.secondaryContainer
                     },
-                contentColor =
+                labelColor =
                     if (selected) {
                         MaterialTheme.colorScheme.onPrimary
                     } else {
                         MaterialTheme.colorScheme.onSecondaryContainer
                     },
             ),
-    ) { Text(text) }
-}
-
-/** 加入应用内相册（PRD 4.2）。 */
-@Composable
-internal fun AddToAlbumDialog(
-    albums: List<AlbumEntity>,
-    counts: Map<Long, Int>,
-    onCreate: (String) -> Unit,
-    onPick: (Long) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var name by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("加入相册") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("新建相册名称") },
-                    singleLine = true,
-                )
-                Button(onClick = {
-                    onCreate(name)
-                    name = ""
-                }) { Text("新建相册") }
-                Spacer(Modifier.height(8.dp))
-                if (albums.isEmpty()) {
-                    Text("还没有相册，先新建一个。")
-                } else {
-                    Text("选择已有相册：")
-                    LazyColumn(Modifier.height(200.dp)) {
-                        items(albums) { a ->
-                            TextButton(onClick = { onPick(a.id) }) {
-                                Text("${a.name} (${counts[a.id] ?: 0})")
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
-}
-
-/** 批量确认：显示总数量、预计释放空间、高风险项数量（PRD 5.6）。 */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun BatchConfirmDialog(
-    state: HomeUiState,
-    onToggle: (Long) -> Unit,
-    onSelectAll: (Boolean) -> Unit,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val items = state.batchCandidates
-    val selected = state.selectedIds
-    val selectedBytes = items.filter { it.id in selected }.sumOf { it.size }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("批量确认删除") },
-        text = {
-            Column {
-                Text("已选 ${selected.size} 项 · 预计释放 ${formatBytes(selectedBytes)}")
-                Text(
-                    "已按安全策略排除高风险 ${state.highRiskCount} 项；本批最多处理 ${state.settings.batchChunkSize} 项。",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { onSelectAll(true) }) { Text("全选") }
-                    Button(onClick = { onSelectAll(false) }) { Text("全不选") }
-                }
-                LazyColumn(Modifier.height(280.dp)) {
-                    items(items) { a ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = a.id in selected, onCheckedChange = { onToggle(a.id) })
-                            AsyncImage(
-                                model = a.uri,
-                                contentDescription = a.displayName,
-                                modifier = Modifier.size(48.dp),
-                                contentScale = ContentScale.Crop,
-                            )
-                            Spacer(Modifier.size(8.dp))
-                            Column {
-                                Text(a.displayName, style = MaterialTheme.typography.bodySmall)
-                                Text(formatBytes(a.size), style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = onConfirm, enabled = selected.isNotEmpty()) {
-                Text("确认删除 ${selected.size} 项")
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
 }
 
 /** 队列与筛选选择（PRD 5.1 / 4.3）。 */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun QueueFilterDialog(
+internal fun QueueFilterSheet(
     state: HomeUiState,
-    albums: List<Pair<String, String>>,
-    onFilterType: (com.example.photoorganizer.data.MediaType?) -> Unit,
+    onFilterType: (MediaType?) -> Unit,
     onFilterBucket: (String?) -> Unit,
-    onSelectQueue: (com.example.photoorganizer.domain.MediaQueue) -> Unit,
+    onClearFilters: () -> Unit,
+    onSelectQueue: (MediaQueue) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val bucketOptions =
+        state.allAssets
+            .asSequence()
+            .filter { state.filterType == null || it.mediaType == state.filterType }
+            .groupBy { it.bucketId.ifBlank { it.bucketName.ifBlank { "unknown" } } }
+            .map { (bucketId, assets) ->
+                BucketFilterOption(
+                    id = bucketId,
+                    name = assets.firstOrNull()?.bucketName?.ifBlank { "未知相册" } ?: "未知相册",
+                    count = assets.size,
+                )
+            }
+            .sortedWith(compareByDescending<BucketFilterOption> { it.count }.thenBy { it.name })
+    val sortedQueues =
+        state.queues.sortedWith(
+            compareByDescending<MediaQueue> { it.items.isNotEmpty() }
+                .thenBy { if (it.type == state.queueType && it.title == state.queueTitle) 0 else 1 }
+                .thenBy { queuePriority(it) }
+                .thenByDescending { it.items.size }
+                .thenBy { it.displayName },
+        )
+    val currentTotal = state.processedCount + state.queueItems.size
+    val currentDone = state.processedCount.coerceIn(0, currentTotal)
+    val currentProgress = if (currentTotal == 0) 1f else currentDone.toFloat() / currentTotal
+    val scopeLabel = queueScopeLabel(state)
+    val hasActiveFilters = state.filterType != null || state.filterBucket != null
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = { Text("选择整理范围") },
-        text = {
-            Column {
-                Text("类型", style = MaterialTheme.typography.labelLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChipButton("全部", state.filterType == null) { onFilterType(null) }
-                    FilterChipButton("图片", state.filterType == com.example.photoorganizer.data.MediaType.IMAGE) {
-                        onFilterType(com.example.photoorganizer.data.MediaType.IMAGE)
+        sheetState = sheetState,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 18.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("切换短队列", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    "按当前范围继续整理，点队列立即进入照片流。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("当前", style = MaterialTheme.typography.labelSmall)
+                            Text(
+                                state.queueSource,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Text(
+                            "剩余 ${state.remaining} 项",
+                            modifier =
+                                Modifier
+                                    .background(
+                                        MaterialTheme.colorScheme.secondaryContainer,
+                                        RoundedCornerShape(100.dp),
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
                     }
-                    FilterChipButton("视频", state.filterType == com.example.photoorganizer.data.MediaType.VIDEO) {
-                        onFilterType(com.example.photoorganizer.data.MediaType.VIDEO)
+                    Text(
+                        "本次进度 $currentDone / $currentTotal",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            "范围：$scopeLabel",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (hasActiveFilters) {
+                            TextButton(onClick = onClearFilters) {
+                                Text("重置")
+                            }
+                        }
+                    }
+                    LinearProgressIndicator(
+                        progress = { currentProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp),
+                    )
+                }
+            }
+            QueueSheetSectionTitle("筛选范围")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                FilterChipButton("全部", state.filterType == null) { onFilterType(null) }
+                FilterChipButton("图片", state.filterType == MediaType.IMAGE) {
+                    onFilterType(MediaType.IMAGE)
+                }
+                FilterChipButton("视频", state.filterType == MediaType.VIDEO) {
+                    onFilterType(MediaType.VIDEO)
+                }
+            }
+            if (bucketOptions.isNotEmpty()) {
+                QueueSheetSectionTitle("系统相册", "${bucketOptions.size} 个")
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    item {
+                        FilterChipButton(
+                            text = "全部相册 · ${bucketOptions.sumOf { it.count }}",
+                            selected = state.filterBucket == null,
+                            onClick = { onFilterBucket(null) },
+                        )
+                    }
+                    items(bucketOptions, key = { it.id }) { bucket ->
+                        FilterChipButton(
+                            text = "${bucket.name} · ${bucket.count}",
+                            selected = state.filterBucket == bucket.id,
+                            onClick = { onFilterBucket(bucket.id) },
+                        )
                     }
                 }
-                Spacer(Modifier.height(8.dp))
-                Text("队列", style = MaterialTheme.typography.labelLarge)
-                LazyColumn(Modifier.height(220.dp)) {
-                    items(state.queues) { q ->
-                        TextButton(onClick = { onSelectQueue(q) }) {
-                            Text("${q.displayName} (${q.items.size})")
+            }
+            QueueSheetSectionTitle("继续整理", "${sortedQueues.count { it.items.isNotEmpty() }} 个可继续")
+            LazyColumn(Modifier.height(332.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(sortedQueues) { q ->
+                    val selected = q.type == state.queueType && q.title == state.queueTitle
+                    Card(
+                        modifier = Modifier.fillMaxWidth().clickable(enabled = q.items.isNotEmpty()) { onSelectQueue(q) },
+                        shape = RoundedCornerShape(8.dp),
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor =
+                                    when {
+                                        selected -> MaterialTheme.colorScheme.primaryContainer
+                                        q.items.isEmpty() -> MaterialTheme.colorScheme.surfaceVariant
+                                        else -> MaterialTheme.colorScheme.surface
+                                    },
+                            ),
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    q.displayName,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    queueRowSubtitle(q),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Text(
+                                if (selected) "当前" else if (q.items.isEmpty()) "完成" else "继续",
+                                modifier =
+                                    Modifier
+                                        .background(
+                                            if (selected) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.secondaryContainer
+                                            },
+                                            RoundedCornerShape(100.dp),
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                color =
+                                    if (selected) {
+                                        MaterialTheme.colorScheme.onPrimary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSecondaryContainer
+                                    },
+                            )
                         }
                     }
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
-    )
+        }
+    }
 }
+
+private data class BucketFilterOption(
+    val id: String,
+    val name: String,
+    val count: Int,
+)
+
+private fun queueScopeLabel(state: HomeUiState): String =
+    buildList {
+        when (state.filterType) {
+            MediaType.IMAGE -> add("图片")
+            MediaType.VIDEO -> add("视频")
+            null -> Unit
+        }
+        if (state.filterBucket != null) {
+            val bucketName =
+                state.allAssets
+                    .firstOrNull { asset ->
+                        val bucketKey = asset.bucketId.ifBlank { asset.bucketName.ifBlank { "unknown" } }
+                        bucketKey == state.filterBucket
+                    }
+                    ?.bucketName
+                    ?.ifBlank { null }
+                    ?: "未知相册"
+            add(bucketName)
+        }
+    }.joinToString(" · ").ifBlank { "全部照片和视频" }
+
+@Composable
+private fun QueueSheetSectionTitle(
+    title: String,
+    count: String? = null,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = MaterialTheme.typography.labelLarge)
+        if (count != null) {
+            Text(
+                count,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private fun queueRowMeta(queue: MediaQueue): String =
+    buildString {
+        if (queue.items.isEmpty()) {
+            append(emptyQueueMeta(queue))
+        } else {
+            append("${queue.items.size} 项")
+            if (queue.estimatedSavingBytes > 0L) {
+                append(" · ${formatBytes(queue.estimatedSavingBytes)}")
+            }
+        }
+    }
+
+private fun queueRowSubtitle(
+    queue: MediaQueue,
+): String {
+    val meta = queueRowMeta(queue)
+    return if (queue.items.isEmpty()) {
+        meta
+    } else {
+        "${queueRowPurpose(queue)} · $meta"
+    }
+}
+
+private fun queueRowPurpose(queue: MediaQueue): String =
+    when (queue.type) {
+        QueueType.RANDOM -> "快速进入下一张判断"
+        QueueType.ON_THIS_DAY -> "回看往年今天的照片"
+        QueueType.ALBUM -> "从某个系统相册继续整理"
+        QueueType.UNPROCESSED -> "查看所有还没处理的内容"
+        QueueType.LATER -> "继续之前暂放的照片"
+        QueueType.SIMILAR -> "横向对比同组相近照片"
+        QueueType.SCREENSHOT -> "集中清理截图"
+        QueueType.LARGE_VIDEO -> "优先处理占空间的视频"
+        QueueType.RECENT_30 -> "整理最近新增内容"
+        QueueType.FAVORITE -> "回看系统或应用收藏"
+        QueueType.MONTH -> "按月份慢慢回顾"
+    }
+
+private fun emptyQueueMeta(queue: MediaQueue): String =
+    when (queue.type) {
+        QueueType.ON_THIS_DAY -> "今天暂无待整理回忆"
+        QueueType.MONTH -> "没有待整理月份"
+        else -> "没有待处理照片"
+    }
+
+private fun queuePriority(queue: MediaQueue): Int =
+    when (queue.type) {
+        QueueType.RANDOM -> 0
+        QueueType.ON_THIS_DAY -> 1
+        QueueType.ALBUM -> 2
+        QueueType.UNPROCESSED -> 3
+        QueueType.LATER -> 4
+        QueueType.SIMILAR -> 5
+        QueueType.SCREENSHOT -> 6
+        QueueType.LARGE_VIDEO -> 7
+        QueueType.RECENT_30 -> 8
+        QueueType.FAVORITE -> 9
+        QueueType.MONTH -> 10
+    }
