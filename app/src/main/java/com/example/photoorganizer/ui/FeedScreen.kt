@@ -245,7 +245,10 @@ fun FeedScreen(
                 dragY = dragY,
                 similarMode = showSimilarComparison,
                 isAppFavorite = isAppFavorite,
-                modifier = Modifier.align(Alignment.Center),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .zIndex(3f),
             )
 
             Column(
@@ -825,26 +828,78 @@ private fun SwipeFeedback(
         }
     val decision = DragDecision(label = label, helper = helper, color = color)
     val alpha = min(0.9f, (distance / 180f).coerceAtLeast(0.28f))
+    val alignment =
+        when {
+            !horizontal -> Alignment.TopCenter
+            dragX > 0 -> Alignment.CenterStart
+            else -> Alignment.CenterEnd
+        }
+    val padding =
+        when {
+            !horizontal -> Modifier.statusBarsPadding().padding(top = 82.dp, start = 18.dp, end = 18.dp)
+            dragX > 0 -> Modifier.padding(start = 18.dp)
+            else -> Modifier.padding(end = 18.dp)
+        }
     Box(
         modifier =
             modifier
-                .background(decision.color.copy(alpha = alpha), RoundedCornerShape(8.dp))
-                .padding(horizontal = 22.dp, vertical = 12.dp),
-        contentAlignment = Alignment.Center,
+                .background(
+                    if (!horizontal) {
+                        decision.color.copy(alpha = alpha * 0.18f)
+                    } else {
+                        Color.Transparent
+                    },
+                ),
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                decision.label,
-                color = Color.White,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                decision.helper,
-                color = Color.White.copy(alpha = 0.82f),
-                style = MaterialTheme.typography.labelMedium,
-            )
-        }
+        SwipeTargetPill(
+            decision = decision,
+            alpha = alpha,
+            armed = armed,
+            modifier =
+                Modifier
+                    .align(alignment)
+                    .then(padding),
+        )
+    }
+}
+
+@Composable
+private fun SwipeTargetPill(
+    decision: DragDecision,
+    alpha: Float,
+    armed: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .background(decision.color.copy(alpha = alpha), RoundedCornerShape(100.dp))
+                .border(
+                    BorderStroke(
+                        width = if (armed) 2.dp else 1.dp,
+                        color = Color.White.copy(alpha = if (armed) 0.82f else 0.34f),
+                    ),
+                    RoundedCornerShape(100.dp),
+                )
+                .padding(horizontal = 24.dp, vertical = 13.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        Text(
+            decision.label,
+            color = Color.White,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            decision.helper,
+            color = Color.White.copy(alpha = 0.84f),
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
