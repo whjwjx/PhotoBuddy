@@ -236,6 +236,10 @@ fun FeedScreen(
                 onExit = requestExit,
                 onOpenTrash = onOpenTrash,
                 onUndo = undoLastAction,
+                onGestureGuide = {
+                    showGestureGuide = true
+                    vm.setFeedGestureGuideSeen(true)
+                },
                 onQueue = { showQueue = true },
             )
 
@@ -274,37 +278,28 @@ fun FeedScreen(
                         onFavorite = { vm.toggleFavorite() },
                     )
                 }
-                Row(
+                AlbumQuickBar(
+                    state = state,
+                    onPick = { vm.addCurrentToAlbum(it) },
+                    onMove = { albumId, direction -> vm.moveAlbumOrder(albumId, direction) },
+                    onMore = { showAddAlbum = true },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    AlbumQuickBar(
-                        state = state,
-                        onPick = { vm.addCurrentToAlbum(it) },
-                        onMove = { albumId, direction -> vm.moveAlbumOrder(albumId, direction) },
-                        onMore = { showAddAlbum = true },
-                        modifier = Modifier.weight(1f),
-                    )
-                    Column(
-                        modifier = Modifier.height(92.dp),
-                        verticalArrangement = Arrangement.SpaceBetween,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        GestureGuideButton(
-                            onClick = {
-                                showGestureGuide = true
-                                vm.setFeedGestureGuideSeen(true)
-                            },
-                        )
-                        ActionPanelToggle(
-                            expanded = state.feedActionBarExpanded,
-                            onClick = { vm.setFeedActionBarExpanded(!state.feedActionBarExpanded) },
-                        )
-                    }
-                }
+                )
             }
 
+            ActionPanelToggle(
+                expanded = state.feedActionBarExpanded,
+                onClick = { vm.setFeedActionBarExpanded(!state.feedActionBarExpanded) },
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .padding(
+                            end = 18.dp,
+                            bottom = if (state.feedActionBarExpanded) 320.dp else 252.dp,
+                        )
+                        .zIndex(5f),
+            )
             DragActionHint(
                 dragX = dragX,
                 dragY = dragY,
@@ -1034,6 +1029,7 @@ private fun TopBar(
     onExit: () -> Unit,
     onOpenTrash: () -> Unit,
     onUndo: () -> Unit,
+    onGestureGuide: () -> Unit,
     onQueue: () -> Unit,
 ) {
     val progress =
@@ -1100,6 +1096,7 @@ private fun TopBar(
             count = trashCount,
             onClick = onOpenTrash,
         )
+        GestureGuideButton(onClick = onGestureGuide)
         FeedTopIconButton(
             icon = Icons.Default.MoreHoriz,
             contentDescription = "切换队列",
@@ -1338,30 +1335,23 @@ private fun ActionBar(
 private fun ActionPanelToggle(
     expanded: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Row(
+    Box(
         modifier =
-            Modifier
-                .height(40.dp)
-                .clip(RoundedCornerShape(100.dp))
+            modifier
+                .size(44.dp)
+                .clip(CircleShape)
                 .background(Color.White.copy(alpha = if (expanded) 0.22f else 0.14f))
-                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)), RoundedCornerShape(100.dp))
-                .clickable(onClick = onClick)
-                .padding(horizontal = 11.dp),
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-        verticalAlignment = Alignment.CenterVertically,
+                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)), CircleShape)
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             if (expanded) Icons.Default.Close else Icons.Default.MoreHoriz,
             contentDescription = if (expanded) "收起操作" else "展开操作",
             tint = Color.White.copy(alpha = 0.92f),
-            modifier = Modifier.size(17.dp),
-        )
-        Text(
-            if (expanded) "收起" else "操作",
-            color = Color.White,
-            style = MaterialTheme.typography.labelLarge,
-            maxLines = 1,
+            modifier = Modifier.size(20.dp),
         )
     }
 }
