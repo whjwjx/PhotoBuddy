@@ -218,12 +218,6 @@ fun HomeScreen(
                 onOpenTrash = onOpenTrash,
             )
 
-            TrashEntry(
-                count = state.trashCount,
-                bytes = state.trashBytes,
-                onClick = onOpenTrash,
-            )
-
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("短队列", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -491,67 +485,6 @@ private fun StatPill(
         Column(Modifier.padding(12.dp)) {
             Text(label, style = MaterialTheme.typography.labelMedium)
             Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-private fun TrashEntry(
-    count: Int,
-    bytes: Long,
-    onClick: () -> Unit,
-) {
-    val hasTrash = count > 0
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(enabled = hasTrash, onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor =
-                    if (hasTrash) {
-                        MaterialTheme.colorScheme.errorContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    },
-            ),
-    ) {
-        Row(
-            Modifier.padding(horizontal = 12.dp, vertical = if (hasTrash) 14.dp else 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(if (hasTrash) 40.dp else 32.dp)
-                        .background(Color.Black.copy(alpha = 0.08f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Default.DeleteOutline, contentDescription = null)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    if (hasTrash) "待删除复核" else "待删除为空",
-                    style =
-                        if (hasTrash) {
-                            MaterialTheme.typography.titleMedium
-                        } else {
-                            MaterialTheme.typography.titleSmall
-                        },
-                )
-                Text(
-                    if (hasTrash) {
-                        "$count 项 · 预计释放 ${formatBytes(bytes)}"
-                    } else {
-                        "上滑照片后会先放到这里"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Text(if (hasTrash) "检查" else "空", style = MaterialTheme.typography.labelLarge)
         }
     }
 }
