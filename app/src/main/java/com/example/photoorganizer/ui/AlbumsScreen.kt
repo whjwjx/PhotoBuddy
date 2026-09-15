@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -271,12 +272,15 @@ private fun AlbumList(
         sortedAlbums.filter { album ->
             query.isBlank() || album.name.contains(query.trim(), ignoreCase = true)
         }
+    val totalClassified = state.albumCounts.values.sum()
+    val pinnedCount = state.pinnedAlbumIds.count { id -> state.albums.any { it.id == id } }
+    val hiddenCount = state.hiddenAlbumIds.count { id -> state.albums.any { it.id == id } }
     Column(
         modifier =
             modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         OutlinedTextField(
             value = query,
@@ -286,10 +290,11 @@ private fun AlbumList(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        Text(
-            "这些相册用于整理页快速归类，不会移动系统相册文件。",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        AlbumManagementSummary(
+            albumCount = state.albums.size,
+            totalClassified = totalClassified,
+            pinnedCount = pinnedCount,
+            hiddenCount = hiddenCount,
         )
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -348,8 +353,17 @@ private fun CreateAlbumCard(
     onCreateName: (String) -> Unit,
 ) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("新建相册", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text("新建整理相册", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "创建后会出现在整理页快捷相册里，不会移动原照片。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -362,7 +376,7 @@ private fun CreateAlbumCard(
                     modifier = Modifier.weight(1f),
                 )
                 Button(onClick = onCreate, enabled = trimmedDraftName.isNotEmpty() && !hasSameNameAlbum) {
-                    Text(if (hasSameNameAlbum) "已存在" else "创建")
+                    Text(if (hasSameNameAlbum) "已存在" else "新建")
                 }
             }
             if (hasSameNameAlbum) {
@@ -376,6 +390,56 @@ private fun CreateAlbumCard(
                 StarterAlbumSuggestions(onCreateName = onCreateName)
             }
         }
+    }
+}
+
+@Composable
+private fun AlbumManagementSummary(
+    albumCount: Int,
+    totalClassified: Int,
+    pinnedCount: Int,
+    hiddenCount: Int,
+) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("整理页相册", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "用于刷照片时一键归类；当前只记录应用内归类，不写入系统相册。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                AlbumSummaryMetric("相册", albumCount.toString(), Modifier.weight(1f))
+                AlbumSummaryMetric("归类", totalClassified.toString(), Modifier.weight(1f))
+                AlbumSummaryMetric("置顶", pinnedCount.toString(), Modifier.weight(1f))
+                AlbumSummaryMetric("隐藏", hiddenCount.toString(), Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumSummaryMetric(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -442,14 +506,21 @@ private fun AlbumRow(
                 )
                 Text(
                     buildString {
-                        append("$count 项 · 整理页归类")
+                        append("应用内相册 · $count 项")
                         if (pinned) append(" · 已置顶")
-                        if (hidden) append(" · 已隐藏于快捷区")
+                        if (hidden) append(" · 快捷区隐藏")
                     },
                     style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    if (lastAddedAt > 0) "最近添加 ${formatDate(lastAddedAt)}" else "暂无内容",
+                    if (lastAddedAt > 0) {
+                        "最近归类 ${formatDate(lastAddedAt)}"
+                    } else {
+                        "在整理页点击相册即可归类"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
