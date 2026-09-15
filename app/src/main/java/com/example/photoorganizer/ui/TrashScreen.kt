@@ -5,9 +5,11 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
@@ -507,6 +509,7 @@ private fun TrashActionBar(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun TrashTile(
     asset: MediaAsset,
     selected: Boolean,
@@ -517,7 +520,10 @@ private fun TrashTile(
     Card(
         modifier =
             Modifier
-                .clickable(onClick = onOpen)
+                .combinedClickable(
+                    onClick = onOpen,
+                    onLongClick = onToggle,
+                )
                 .border(
                     width = if (selected) 2.dp else 1.dp,
                     color =
@@ -738,7 +744,7 @@ private fun TrashReviewHeader(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        "确认前不会删除，复核后再交给系统处理",
+                        "点图预览，长按选择；确认前不会删除",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
