@@ -474,9 +474,9 @@ private fun AlbumManagementSummary(
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("整理页相册", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("本地相册映射", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "用于刷照片时一键归类；当前只记录应用内归类，不写入系统相册。",
+                    "用于刷照片时一键归类；只记录 App 内映射，不创建、移动或删除系统相册。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -484,8 +484,8 @@ private fun AlbumManagementSummary(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                AlbumSummaryMetric("相册", albumCount.toString(), Modifier.weight(1f))
-                AlbumSummaryMetric("归类", totalClassified.toString(), Modifier.weight(1f))
+                AlbumSummaryMetric("映射", albumCount.toString(), Modifier.weight(1f))
+                AlbumSummaryMetric("记录", totalClassified.toString(), Modifier.weight(1f))
                 AlbumSummaryMetric("置顶", pinnedCount.toString(), Modifier.weight(1f))
                 AlbumSummaryMetric("隐藏", hiddenCount.toString(), Modifier.weight(1f))
             }
@@ -495,7 +495,7 @@ private fun AlbumManagementSummary(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp),
             ) {
-                Text("添加已有系统相册 · $systemAlbumCount 个可选")
+                Text("导入系统相册映射 · $systemAlbumCount 个可选")
             }
         }
     }
@@ -510,11 +510,11 @@ private fun SystemAlbumImportDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("添加已有系统相册") },
+        title = { Text("导入系统相册映射") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "会创建同名的 App 内整理相册，并导入其中照片的归类记录；不会移动或修改系统相册文件。",
+                    "选择系统相册后，会在 App 内创建同名映射并导入归类记录；不会移动、重命名或修改系统相册文件。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -545,7 +545,7 @@ private fun SystemAlbumImportDialog(
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                     Text(
-                                        "${option.count} 项 · ${option.pendingCount} 项待整理 · 可导入为 App 内相册",
+                                        "${option.count} 项 · ${option.pendingCount} 项待整理 · 可导入为本地映射",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,
@@ -562,10 +562,10 @@ private fun SystemAlbumImportDialog(
                                         modifier = Modifier.size(16.dp),
                                     )
                                     Spacer(Modifier.width(2.dp))
-                                    Text("整理")
+                                    Text("按此整理")
                                 }
                                 TextButton(onClick = { onImport(option) }) {
-                                    Text("导入")
+                                    Text("导入映射")
                                 }
                             }
                         }
@@ -658,7 +658,7 @@ private fun AlbumRow(
                 )
                 Text(
                     buildString {
-                        append("应用内相册 · $count 项")
+                        append("本地映射 · $count 项")
                         if (pinned) append(" · 已置顶")
                         if (hidden) append(" · 快捷区隐藏")
                     },
@@ -671,7 +671,7 @@ private fun AlbumRow(
                     if (lastAddedAt > 0) {
                         "最近归类 ${formatDate(lastAddedAt)}"
                     } else {
-                        "在整理页点击相册即可归类"
+                        "不影响系统相册；整理页点击即可归类"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -713,7 +713,7 @@ private fun AlbumRow(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("移除相册映射") },
+                        text = { Text("移除本地映射") },
                         onClick = {
                             menuExpanded = false
                             onDelete()
@@ -772,10 +772,10 @@ private fun AlbumDetail(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("${items.size} 项", style = MaterialTheme.typography.titleMedium)
+                    Text("本地映射 · ${items.size} 项", style = MaterialTheme.typography.titleMedium)
                     Text(
                         if (selectedIds.isEmpty()) {
-                            "移出相册不会删除原照片"
+                            "移出只取消归类，不会删除原照片"
                         } else {
                             "已选 ${selectedIds.size} 项"
                         },
@@ -1147,16 +1147,16 @@ private fun DeleteAlbumDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("移除「${album.name}」映射？") },
+        title = { Text("移除「${album.name}」本地映射？") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "只会移除这个 App 内相册和其中 $count 条归类记录。",
+                    "只会移除这个 App 内映射和其中 $count 条归类记录。",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "不会删除照片文件，也不会删除系统相册；之后仍可从系统相册或“添加已有系统相册”重新导入。",
+                    "不会删除照片文件，也不会删除系统相册；之后仍可从系统相册或“导入系统相册映射”重新导入。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
