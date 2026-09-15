@@ -250,8 +250,8 @@ fun FeedScreen(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
             ) {
                 if (showSimilarComparison) {
                     SimilarComparisonStrip(
@@ -289,7 +289,7 @@ fun FeedScreen(
                         .zIndex(8f)
                         .navigationBarsPadding()
                         .padding(horizontal = 16.dp)
-                        .padding(bottom = 314.dp),
+                        .padding(bottom = 268.dp),
             )
         }
     }
@@ -1046,7 +1046,7 @@ private fun AssetCaption(asset: MediaAsset) {
         Modifier
             .fillMaxWidth()
             .background(Color.Black.copy(alpha = 0.42f), RoundedCornerShape(8.dp))
-            .padding(10.dp),
+            .padding(horizontal = 10.dp, vertical = 7.dp),
     ) {
         Text(asset.displayName, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
@@ -1075,7 +1075,7 @@ private fun ActionBar(
         Modifier
             .fillMaxWidth()
             .background(Color.Black.copy(alpha = 0.48f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp, vertical = 8.dp),
+            .padding(horizontal = 6.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1135,7 +1135,7 @@ private fun AlbumQuickBar(
         Modifier
             .fillMaxWidth()
             .background(Color.Black.copy(alpha = 0.54f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = 7.dp, vertical = 5.dp),
     ) {
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1180,7 +1180,7 @@ private fun AlbumChip(
                     onClick = onClick,
                     onLongClick = onLongClick,
                 )
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 11.dp, vertical = 7.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1723,30 +1723,23 @@ private fun FeedAction(
             modifier
                 .clip(RoundedCornerShape(8.dp))
                 .clickable(onClick = onClick)
-                .padding(horizontal = 4.dp, vertical = 6.dp),
+                .padding(horizontal = 4.dp, vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
             Modifier
-                .size(42.dp)
+                .size(38.dp)
                 .background(accent.copy(alpha = 0.22f), CircleShape)
                 .border(BorderStroke(1.dp, accent.copy(alpha = 0.48f)), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = label, tint = accent)
+            Icon(icon, contentDescription = "$label，$helper", tint = accent)
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(3.dp))
         Text(
             label,
             color = Color.White,
             style = MaterialTheme.typography.bodySmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            helper,
-            color = Color.White.copy(alpha = 0.52f),
-            style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

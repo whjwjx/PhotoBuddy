@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -168,7 +169,7 @@ fun TrashScreen(onExit: () -> Unit) {
                     .padding(horizontal = 12.dp),
             ) {
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
-                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
                             if (sourceFilter == null) {
                                 "${items.size} 项等待复核"
@@ -239,13 +240,13 @@ fun TrashScreen(onExit: () -> Unit) {
                         )
                     }
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 SourceFilterRow(
                     options = sourceOptions,
                     selected = sourceFilter,
                     onSelect = { sourceFilter = it },
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     TrashSort.entries.forEach { option ->
                         OutlinedButton(
@@ -256,7 +257,7 @@ fun TrashScreen(onExit: () -> Unit) {
                         }
                     }
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 if (visibleItems.isEmpty()) {
                     EmptyFilteredTrash(Modifier.fillMaxSize())
                 } else {
@@ -418,12 +419,12 @@ private fun TrashActionBar(
             Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
     ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(
                     modifier =
@@ -472,6 +473,11 @@ private fun TrashActionBar(
                     onClick = onDelete,
                     enabled = selectedCount > 0,
                     modifier = Modifier.weight(1f),
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError,
+                        ),
                 ) {
                     Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.size(6.dp))
@@ -482,13 +488,6 @@ private fun TrashActionBar(
                     )
                 }
             }
-            Text(
-                deletePolicyText(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
     }
 }
@@ -672,7 +671,14 @@ private fun DeleteConfirmDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onConfirm) {
+            Button(
+                onClick = onConfirm,
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                    ),
+            ) {
                 Text(if (canUseRecentDelete) "移入最近删除" else "永久删除")
             }
         },
