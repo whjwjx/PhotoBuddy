@@ -177,7 +177,7 @@ fun HomeScreen(
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("当前是部分照片访问", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "系统只允许本 App 访问你勾选的部分照片，扫描结果会偏少。",
+                            "系统只允许本应用访问你勾选的部分照片，扫描结果会偏少。",
                             style = MaterialTheme.typography.bodySmall,
                         )
                         OutlinedButton(onClick = {
