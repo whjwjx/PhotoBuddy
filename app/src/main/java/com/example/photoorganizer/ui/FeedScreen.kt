@@ -10,6 +10,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +32,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -252,20 +254,33 @@ fun FeedScreen(
                     )
                 }
                 AssetCaption(asset = asset)
-                ActionBar(
-                    similarMode = showSimilarComparison,
-                    isAppFavorite = isAppFavorite,
-                    onTrash = { vm.act(MediaStatus.TRASH) },
-                    onKeep = { vm.act(MediaStatus.KEEP) },
-                    onLater = { vm.act(MediaStatus.LATER) },
-                    onFavorite = { vm.toggleFavorite() },
-                )
-                AlbumQuickBar(
-                    state = state,
-                    onPick = { vm.addCurrentToAlbum(it) },
-                    onMove = { albumId, direction -> vm.moveAlbumOrder(albumId, direction) },
-                    onMore = { showAddAlbum = true },
-                )
+                if (state.feedActionBarExpanded) {
+                    ActionBar(
+                        similarMode = showSimilarComparison,
+                        isAppFavorite = isAppFavorite,
+                        onTrash = { vm.act(MediaStatus.TRASH) },
+                        onKeep = { vm.act(MediaStatus.KEEP) },
+                        onLater = { vm.act(MediaStatus.LATER) },
+                        onFavorite = { vm.toggleFavorite() },
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    AlbumQuickBar(
+                        state = state,
+                        onPick = { vm.addCurrentToAlbum(it) },
+                        onMove = { albumId, direction -> vm.moveAlbumOrder(albumId, direction) },
+                        onMore = { showAddAlbum = true },
+                        modifier = Modifier.weight(1f),
+                    )
+                    ActionPanelToggle(
+                        expanded = state.feedActionBarExpanded,
+                        onClick = { vm.setFeedActionBarExpanded(!state.feedActionBarExpanded) },
+                    )
+                }
             }
 
             UndoBanner(
@@ -1133,13 +1148,47 @@ private fun ActionBar(
 }
 
 @Composable
+private fun ActionPanelToggle(
+    expanded: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .height(40.dp)
+                .clip(RoundedCornerShape(100.dp))
+                .background(Color.White.copy(alpha = if (expanded) 0.22f else 0.14f))
+                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)), RoundedCornerShape(100.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 11.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            if (expanded) Icons.Default.Close else Icons.Default.MoreHoriz,
+            contentDescription = if (expanded) "收起操作" else "展开操作",
+            tint = Color.White.copy(alpha = 0.92f),
+            modifier = Modifier.size(17.dp),
+        )
+        Text(
+            if (expanded) "收起" else "操作",
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
 private fun AlbumQuickBar(
     state: HomeUiState,
     onPick: (Long) -> Unit,
     onMove: (Long, Int) -> Unit,
     onMore: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var sortingAlbumId by remember { mutableStateOf<Long?>(null) }
+    val scrollState = rememberScrollState()
     val quickAlbums =
         remember(state.albums, state.hiddenAlbumIds, state.albumOrderIds) {
             orderedAlbumsForQuickBar(
@@ -1155,47 +1204,78 @@ private fun AlbumQuickBar(
                     icon = if (state.albums.isEmpty()) Icons.Default.Add else Icons.Default.MoreHoriz,
                 )
         }
-    val columns = remember(quickItems) { quickItems.chunked(2) }
+    val firstRow = remember(quickItems) { quickItems.filterIndexed { index, _ -> index % 2 == 0 } }
+    val secondRow = remember(quickItems) { quickItems.filterIndexed { index, _ -> index % 2 == 1 } }
     Box(
-        Modifier
-            .fillMaxWidth()
+        modifier
             .height(92.dp)
             .background(Color.Black.copy(alpha = 0.46f), RoundedCornerShape(8.dp))
             .padding(horizontal = 6.dp, vertical = 6.dp),
     ) {
-        LazyRow(
+        Column(
             modifier = Modifier.fillMaxHeight(),
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            itemsIndexed(
-                columns,
-                key = { index, column -> column.joinToString("-") { it.key } + "-$index" },
-            ) { _, column ->
-                Column(
-                    modifier = Modifier.fillMaxHeight(),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    column.forEach { item ->
-                        when (item) {
-                            is QuickAlbumItem.Album ->
-                                SortableAlbumChip(
-                                    album = item.album,
-                                    sorting = sortingAlbumId == item.album.id,
-                                    onSortStart = { sortingAlbumId = item.album.id },
-                                    onSortEnd = { sortingAlbumId = null },
-                                    onMove = onMove,
-                                    onPick = { onPick(item.album.id) },
-                                )
-                            is QuickAlbumItem.More ->
-                                AlbumChip(
-                                    text = item.text,
-                                    icon = item.icon,
-                                    onClick = onMore,
-                                )
-                        }
-                    }
-                }
+            AlbumQuickRow(
+                items = firstRow,
+                sortingAlbumId = sortingAlbumId,
+                scrollState = scrollState,
+                onSortStart = { sortingAlbumId = it },
+                onSortEnd = { sortingAlbumId = null },
+                onMove = onMove,
+                onPick = onPick,
+                onMore = onMore,
+            )
+            AlbumQuickRow(
+                items = secondRow,
+                sortingAlbumId = sortingAlbumId,
+                scrollState = scrollState,
+                onSortStart = { sortingAlbumId = it },
+                onSortEnd = { sortingAlbumId = null },
+                onMove = onMove,
+                onPick = onPick,
+                onMore = onMore,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AlbumQuickRow(
+    items: List<QuickAlbumItem>,
+    sortingAlbumId: Long?,
+    scrollState: androidx.compose.foundation.ScrollState,
+    onSortStart: (Long) -> Unit,
+    onSortEnd: () -> Unit,
+    onMove: (Long, Int) -> Unit,
+    onPick: (Long) -> Unit,
+    onMore: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        items.forEach { item ->
+            when (item) {
+                is QuickAlbumItem.Album ->
+                    SortableAlbumChip(
+                        album = item.album,
+                        sorting = sortingAlbumId == item.album.id,
+                        onSortStart = { onSortStart(item.album.id) },
+                        onSortEnd = onSortEnd,
+                        onMove = onMove,
+                        onPick = { onPick(item.album.id) },
+                    )
+                is QuickAlbumItem.More ->
+                    AlbumChip(
+                        text = item.text,
+                        icon = item.icon,
+                        onClick = onMore,
+                    )
             }
         }
     }

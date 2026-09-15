@@ -49,6 +49,7 @@ class SettingsRepository(
         val PINNED_ALBUM_IDS = stringPreferencesKey("pinned_album_ids")
         val HIDDEN_ALBUM_IDS = stringPreferencesKey("hidden_album_ids")
         val ALBUM_ORDER_IDS = stringPreferencesKey("album_order_ids")
+        val FEED_ACTION_BAR_EXPANDED = booleanPreferencesKey("feed_action_bar_expanded")
         val REMINDER_ENABLED = booleanPreferencesKey("reminder_enabled")
         val REMINDER_INTERVAL_DAYS = intPreferencesKey("reminder_interval_days")
         val QUIET_START_HOUR = intPreferencesKey("quiet_start_hour")
@@ -85,6 +86,9 @@ class SettingsRepository(
 
     val albumOrderIds: Flow<List<Long>> =
         context.settingsDataStore.data.map { p -> parseIdList(p[Keys.ALBUM_ORDER_IDS].orEmpty()) }
+
+    val feedActionBarExpanded: Flow<Boolean> =
+        context.settingsDataStore.data.map { p -> p[Keys.FEED_ACTION_BAR_EXPANDED] ?: false }
 
     suspend fun setDailyGoal(v: Int) {
         context.settingsDataStore.edit { it[Keys.DAILY_GOAL] = v }
@@ -141,6 +145,10 @@ class SettingsRepository(
         context.settingsDataStore.edit { p ->
             p[Keys.ALBUM_ORDER_IDS] = albumIds.distinct().joinToString(",")
         }
+    }
+
+    suspend fun setFeedActionBarExpanded(expanded: Boolean) {
+        context.settingsDataStore.edit { p -> p[Keys.FEED_ACTION_BAR_EXPANDED] = expanded }
     }
 
     suspend fun getLastScanMs(): Long = context.settingsDataStore.data.first()[Keys.LAST_SCAN_MS] ?: 0L

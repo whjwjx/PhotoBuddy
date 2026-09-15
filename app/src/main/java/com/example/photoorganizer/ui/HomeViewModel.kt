@@ -104,6 +104,7 @@ data class HomeUiState(
     val pinnedAlbumIds: Set<Long> = emptySet(),
     val hiddenAlbumIds: Set<Long> = emptySet(),
     val albumOrderIds: List<Long> = emptyList(),
+    val feedActionBarExpanded: Boolean = false,
     val openAlbumId: Long? = null,
     val openAlbumMediaIds: List<Long> = emptyList(),
     // --- P4：增量扫描 / 每日整理任务 ---
@@ -211,6 +212,11 @@ class HomeViewModel(
         }
         viewModelScope.launch {
             settingsRepo.albumOrderIds.collect { ids -> _uiState.update { it.copy(albumOrderIds = ids) } }
+        }
+        viewModelScope.launch {
+            settingsRepo.feedActionBarExpanded.collect { expanded ->
+                _uiState.update { it.copy(feedActionBarExpanded = expanded) }
+            }
         }
         viewModelScope.launch {
             logDao.observeRecent(20).collect { list -> _uiState.update { it.copy(recentLogs = list) } }
@@ -798,6 +804,12 @@ class HomeViewModel(
             val moved = next.removeAt(from)
             next.add(to, moved)
             settingsRepo.setAlbumOrderIds(next)
+        }
+    }
+
+    fun setFeedActionBarExpanded(expanded: Boolean) {
+        viewModelScope.launch {
+            settingsRepo.setFeedActionBarExpanded(expanded)
         }
     }
 
