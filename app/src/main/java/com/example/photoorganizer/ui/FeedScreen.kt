@@ -72,6 +72,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -287,16 +288,22 @@ fun FeedScreen(
                         onMore = { showAddAlbum = true },
                         modifier = Modifier.weight(1f),
                     )
-                    ActionPanelToggle(
-                        expanded = state.feedActionBarExpanded,
-                        onClick = { vm.setFeedActionBarExpanded(!state.feedActionBarExpanded) },
-                    )
-                    GestureGuideButton(
-                        onClick = {
-                            showGestureGuide = true
-                            vm.setFeedGestureGuideSeen(true)
-                        },
-                    )
+                    Column(
+                        modifier = Modifier.height(92.dp),
+                        verticalArrangement = Arrangement.SpaceBetween,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        GestureGuideButton(
+                            onClick = {
+                                showGestureGuide = true
+                                vm.setFeedGestureGuideSeen(true)
+                            },
+                        )
+                        ActionPanelToggle(
+                            expanded = state.feedActionBarExpanded,
+                            onClick = { vm.setFeedActionBarExpanded(!state.feedActionBarExpanded) },
+                        )
+                    }
                 }
             }
 
@@ -1405,7 +1412,9 @@ private fun AlbumQuickBar(
     Box(
         modifier
             .height(92.dp)
-            .background(Color.Black.copy(alpha = 0.46f), RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.Black.copy(alpha = 0.46f))
+            .clipToBounds()
             .padding(horizontal = 6.dp, vertical = 6.dp),
     ) {
         Column(
