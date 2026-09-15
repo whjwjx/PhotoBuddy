@@ -1279,7 +1279,11 @@ private fun albumSheetMeta(
 
 private fun similarMeta(asset: MediaAsset): String =
     buildString {
-        append("当前：${formatBytes(asset.size)}")
+        append("当前：")
+        if (asset.width > 0 && asset.height > 0) {
+            append("${asset.width}×${asset.height} · ")
+        }
+        append(formatBytes(asset.size))
         if (asset.capturedAt > 0) append(" · ${formatDate(asset.capturedAt)}")
         if (asset.bucketName.isNotEmpty()) append(" · ${asset.bucketName}")
     }
@@ -1302,7 +1306,7 @@ private fun similarGroupMeta(items: List<MediaAsset>): String {
             sizes.first() == sizes.last() -> "大小 ${formatBytes(sizes.first())}"
             else -> "大小 ${formatBytes(sizes.first())} - ${formatBytes(sizes.last())}"
         }
-    return "$timeText · $sizeText"
+    return "共 ${items.size} 张 · $timeText · $sizeText"
 }
 
 private fun captureOrAddedMs(asset: MediaAsset): Long =
