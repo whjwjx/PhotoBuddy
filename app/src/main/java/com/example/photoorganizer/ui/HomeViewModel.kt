@@ -760,10 +760,10 @@ class HomeViewModel(
                 asset = asset,
                 status = MediaStatus.ALBUM,
                 message =
-                    if (existingAlbum == null) {
-                        "已新建并加入「$trimmed」"
-                    } else {
-                        "已加入「$trimmed」"
+                    when {
+                        existingAlbum == null -> "已新建并加入「$trimmed」"
+                        existed -> "已在「$trimmed」中，继续下一张"
+                        else -> "已加入「$trimmed」"
                     },
                 undoAlbumId = albumId,
                 undoAlbumItemAdded = !existed,
@@ -783,7 +783,12 @@ class HomeViewModel(
             finishAction(
                 asset = asset,
                 status = MediaStatus.ALBUM,
-                message = "已加入「$albumName」",
+                message =
+                    if (existed) {
+                        "已在「$albumName」中，继续下一张"
+                    } else {
+                        "已加入「$albumName」"
+                    },
                 undoAlbumId = albumId,
                 undoAlbumItemAdded = !existed,
             )

@@ -998,7 +998,7 @@ private fun undoVisual(message: String): UndoVisual =
             UndoVisual(Color(0xFF8E8E93), "已移出当前短队列")
         message.contains("收藏") ->
             UndoVisual(Color(0xFFFFCC00), "已从未整理中移出")
-        message.contains("相册") ->
+        message.contains("相册") || message.contains("已加入") || message.contains("已在") ->
             UndoVisual(Color(0xFF0A84FF), "已加入相册")
         else ->
             UndoVisual(Color(0xFF34C759), "继续下一张")
