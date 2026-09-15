@@ -1216,17 +1216,17 @@ private fun GestureHints(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(96.dp)) {
             Text(
-                if (similarMode) "上一张" else "稍后",
+                if (similarMode) "上一张" else "左滑稍后",
                 color = Color.White.copy(alpha = 0.4f),
                 style = MaterialTheme.typography.labelMedium,
             )
             Text(
-                if (similarMode) "下一张" else "保留",
+                if (similarMode) "下一张" else "右滑保留",
                 color = Color.White.copy(alpha = 0.4f),
                 style = MaterialTheme.typography.labelMedium,
             )
         }
-        Text("上滑待删除", color = Color.White.copy(alpha = 0.45f), style = MaterialTheme.typography.labelMedium)
+        Text("上滑加入待删除", color = Color.White.copy(alpha = 0.45f), style = MaterialTheme.typography.labelMedium)
     }
 }
 
