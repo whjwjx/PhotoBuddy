@@ -642,20 +642,21 @@ private fun SimilarComparisonStrip(
     Column(
         Modifier
             .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.54f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(7.dp),
+            .background(Color.Black.copy(alpha = 0.58f), RoundedCornerShape(8.dp))
+            .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)), RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    "相似照片组",
+                    "相似照片比较",
                     color = Color.White,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "左右切换候选，选出最值得留下的一张。",
+                    similarGroupMeta(candidates.map { it.asset }),
                     color = Color.White.copy(alpha = 0.72f),
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
@@ -672,76 +673,141 @@ private fun SimilarComparisonStrip(
                 style = MaterialTheme.typography.labelLarge,
             )
         }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            itemsIndexed(candidates, key = { _, candidate -> candidate.asset.id }) { position, candidate ->
+                SimilarCandidateTile(
+                    candidate = candidate,
+                    position = position,
+                    selected = candidate.index == currentIndex,
+                    onPick = { onPick(candidate.index) },
+                )
+            }
+        }
         current?.let { asset ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                SimilarInfoPill(
+                    label = "分辨率",
+                    value = similarResolutionText(asset),
+                    modifier = Modifier.weight(1f),
+                )
+                SimilarInfoPill(
+                    label = "大小",
+                    value = formatBytes(asset.size),
+                    modifier = Modifier.weight(1f),
+                )
+                SimilarInfoPill(
+                    label = "时间",
+                    value = similarDateText(asset),
+                    modifier = Modifier.weight(1f),
+                )
+            }
             Text(
-                "当前 · ${similarMeta(asset)}",
-                color = Color.White.copy(alpha = 0.72f),
+                asset.displayName + if (asset.bucketName.isNotEmpty()) " · ${asset.bucketName}" else "",
+                color = Color.White.copy(alpha = 0.68f),
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Text(
-            similarGroupMeta(candidates.map { it.asset }),
-            color = Color.White.copy(alpha = 0.62f),
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             SimilarGroupAction(
-                label = "全部稍后",
+                label = "整组稍后",
                 helper = "保留本组待复看",
                 modifier = Modifier.weight(1f),
                 onClick = onLaterAll,
             )
             SimilarGroupAction(
-                label = "留当前",
-                helper = "其余进待删除",
+                label = "保留当前",
+                helper = "其余加入待删除",
                 modifier = Modifier.weight(1f),
                 onClick = onKeepCurrent,
             )
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            itemsIndexed(candidates, key = { _, candidate -> candidate.asset.id }) { position, candidate ->
-                val item = candidate.asset
-                val selected = candidate.index == currentIndex
-                Box(
-                    modifier =
-                        Modifier
-                            .size(58.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color.White.copy(alpha = if (selected) 0.24f else 0.12f))
-                            .border(
-                                width = if (selected) 2.dp else 1.dp,
-                                color = if (selected) Color.White else Color.White.copy(alpha = 0.28f),
-                                shape = RoundedCornerShape(8.dp),
-                            )
-                            .clickable { onPick(candidate.index) }
-                            .padding(2.dp),
-                ) {
-                    AsyncImage(
-                        model = item.uri,
-                        contentDescription = item.displayName,
-                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(6.dp)),
-                        contentScale = ContentScale.Crop,
-                    )
-                    Text(
-                        if (selected) "当前" else "${position + 1}",
-                        modifier =
-                            Modifier
-                                .align(Alignment.BottomStart)
-                                .background(
-                                    Color.Black.copy(alpha = if (selected) 0.72f else 0.56f),
-                                    RoundedCornerShape(topEnd = 6.dp),
-                                )
-                                .padding(horizontal = 5.dp, vertical = 2.dp),
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
-            }
+    }
+}
+
+@Composable
+private fun SimilarCandidateTile(
+    candidate: SimilarCandidate,
+    position: Int,
+    selected: Boolean,
+    onPick: () -> Unit,
+) {
+    val item = candidate.asset
+    Column(
+        modifier =
+            Modifier
+                .width(76.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.White.copy(alpha = if (selected) 0.22f else 0.11f))
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) Color.White else Color.White.copy(alpha = 0.28f),
+                    shape = RoundedCornerShape(8.dp),
+                )
+                .clickable(onClick = onPick)
+                .padding(3.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(Modifier.fillMaxWidth().height(58.dp)) {
+            AsyncImage(
+                model = item.uri,
+                contentDescription = item.displayName,
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(6.dp)),
+                contentScale = ContentScale.Crop,
+            )
+            Text(
+                if (selected) "当前" else "${position + 1}",
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .background(
+                            Color.Black.copy(alpha = if (selected) 0.74f else 0.56f),
+                            RoundedCornerShape(topEnd = 6.dp),
+                        )
+                        .padding(horizontal = 5.dp, vertical = 2.dp),
+                color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
+        Text(
+            formatBytes(item.size),
+            color = Color.White.copy(alpha = 0.72f),
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun SimilarInfoPill(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        Text(
+            label,
+            color = Color.White.copy(alpha = 0.56f),
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            value,
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -1691,15 +1757,17 @@ private fun albumSheetMeta(
         if (recent > 0L) append(" · 最近 ${formatDate(recent)}")
     }
 
-private fun similarMeta(asset: MediaAsset): String =
-    buildString {
-        if (asset.width > 0 && asset.height > 0) {
-            append("${asset.width}×${asset.height} · ")
-        }
-        append(formatBytes(asset.size))
-        if (asset.capturedAt > 0) append(" · ${formatDate(asset.capturedAt)}")
-        if (asset.bucketName.isNotEmpty()) append(" · ${asset.bucketName}")
+private fun similarResolutionText(asset: MediaAsset): String =
+    if (asset.width > 0 && asset.height > 0) {
+        "${asset.width}×${asset.height}"
+    } else {
+        "未知"
     }
+
+private fun similarDateText(asset: MediaAsset): String {
+    val time = captureOrAddedMs(asset)
+    return if (time > 0L) formatDate(time) else "未知"
+}
 
 private fun similarGroupMeta(items: List<MediaAsset>): String {
     val capturedTimes =
