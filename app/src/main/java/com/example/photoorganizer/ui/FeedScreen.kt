@@ -1063,6 +1063,7 @@ private fun AlbumActionSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var draftName by remember(album.id, album.name) { mutableStateOf(album.name) }
+    var showMapping by remember { mutableStateOf(false) }
     val trimmedName = draftName.trim()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1105,6 +1106,12 @@ private fun AlbumActionSheet(
                 Text(if (pinned) "取消置顶" else "置顶到快捷区")
             }
             TextButton(
+                onClick = { showMapping = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("映射说明")
+            }
+            TextButton(
                 onClick = {
                     onToggleHidden()
                     onDismiss()
@@ -1120,6 +1127,23 @@ private fun AlbumActionSheet(
             )
             Spacer(Modifier.height(12.dp))
         }
+    }
+    if (showMapping) {
+        AlertDialog(
+            onDismissRequest = { showMapping = false },
+            title = { Text("相册映射说明") },
+            text = {
+                Text(
+                    "「${album.name}」目前是 App 内标签。加入、移出或删除这个相册，只会改变本 App 的归类记录，" +
+                        "不会移动、复制或删除系统相册里的照片文件。置顶只影响整理页底部快捷区。",
+                )
+            },
+            confirmButton = {
+                Button(onClick = { showMapping = false }) {
+                    Text("知道了")
+                }
+            },
+        )
     }
 }
 
