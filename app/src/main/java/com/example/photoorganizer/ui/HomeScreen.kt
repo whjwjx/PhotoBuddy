@@ -210,6 +210,7 @@ fun HomeScreen(
                 monthQueue = homeQueues.firstOrNull { it.type == QueueType.MONTH },
                 albumQueue = homeQueues.firstOrNull { it.type == QueueType.ALBUM },
                 trashCount = state.trashCount,
+                trashBytes = state.trashBytes,
                 onPickQueue = { queue ->
                     vm.selectQueue(queue)
                     onStartOrganize()
@@ -283,6 +284,7 @@ private fun HomeEntryGrid(
     monthQueue: MediaQueue?,
     albumQueue: MediaQueue?,
     trashCount: Int,
+    trashBytes: Long,
     onPickQueue: (MediaQueue) -> Unit,
     onOpenAlbums: () -> Unit,
     onOpenTrash: () -> Unit,
@@ -342,7 +344,7 @@ private fun HomeEntryGrid(
         HomeEntryCard(
             label = "Trash",
             title = "待删除复核",
-            detail = if (trashCount > 0) "$trashCount 项待确认" else "当前为空",
+            detail = if (trashCount > 0) "$trashCount 项待复核 · 待释放 ${formatBytes(trashBytes)}" else "当前为空",
             icon = Icons.Default.DeleteOutline,
             enabled = trashCount > 0,
             modifier = Modifier.fillMaxWidth(),
