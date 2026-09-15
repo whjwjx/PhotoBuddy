@@ -425,12 +425,25 @@ class HomeViewModel(
         _uiState.update { it.copy(error = null) }
     }
 
-    /** 从待删除恢复到未整理队列。 */
-    fun restoreFromTrash(ids: Set<Long>) {
+    /** 从待删除恢复到未整理队列，或在单张复核时直接标记保留。 */
+    fun restoreFromTrash(
+        ids: Set<Long>,
+        targetStatus: MediaStatus? = null,
+    ) {
         if (ids.isEmpty()) return
         val byId = _uiState.value.trashItems.associateBy { it.id }
         viewModelScope.launch {
-            dao.deleteByIds(ids.toList())
+            val now = System.currentTimeMillis()
+            val restoredStatuses =
+                ids.mapNotNull { id ->
+                    val asset = byId[id] ?: return@mapNotNull null
+                    targetStatus?.let { status -> toEntity(asset, status).copy(updatedAt = now) }
+                }
+            if (targetStatus == null) {
+                dao.deleteByIds(ids.toList())
+            } else {
+                restoredStatuses.forEach { dao.upsert(it) }
+            }
             ids.forEach { id ->
                 byId[id]?.let { asset ->
                     logDao.insert(
@@ -441,14 +454,26 @@ class HomeViewModel(
                             action = "restore",
                             source = "待删除",
                             beforeState = MediaStatus.TRASH.value,
-                            afterState = "",
-                            createdAt = System.currentTimeMillis(),
+                            afterState = targetStatus?.value.orEmpty(),
+                            createdAt = now,
                         ),
                     )
                 }
             }
-            settingsRepo.addProcessed(-ids.size)
-            _uiState.update { s -> recompute(s.copy(undo = null, feedbackMessage = null)) }
+            if (targetStatus == null) {
+                settingsRepo.addProcessed(-ids.size)
+            }
+            _uiState.update { s ->
+                val updatedStatuses =
+                    s.statuses.filterNot { it.localAssetId in ids } + restoredStatuses
+                recompute(
+                    s.copy(
+                        statuses = updatedStatuses,
+                        undo = null,
+                        feedbackMessage = null,
+                    ),
+                )
+            }
         }
     }
 

@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.photoorganizer.data.MediaAsset
+import com.example.photoorganizer.data.local.MediaStatus
 
 private enum class TrashSort(val label: String) {
     NEWEST("最新"),
@@ -275,6 +276,11 @@ fun TrashScreen(onExit: () -> Unit) {
                 selectedIds = selectedIds - asset.id
                 previewAsset = null
             },
+            onKeep = {
+                vm.restoreFromTrash(setOf(asset.id), MediaStatus.KEEP)
+                selectedIds = selectedIds - asset.id
+                previewAsset = null
+            },
             onDelete = {
                 pendingDeleteIds = setOf(asset.id)
                 previewAsset = null
@@ -371,7 +377,7 @@ private fun TrashActionBar(
                         if (selectedCount > 0) {
                             "预计释放 ${formatBytes(selectedBytes)}，系统确认后才计入已释放"
                         } else {
-                            "可恢复到未整理，也可进入系统删除确认"
+                            "批量可恢复到未整理；点开单张可直接标记保留"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -499,6 +505,7 @@ private fun SelectionBadge(
 private fun TrashPreviewDialog(
     asset: MediaAsset,
     onRestore: () -> Unit,
+    onKeep: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -533,7 +540,8 @@ private fun TrashPreviewDialog(
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onRestore) { Text("恢复") }
+                TextButton(onClick = onRestore) { Text("恢复到未整理") }
+                TextButton(onClick = onKeep) { Text("标记保留") }
                 TextButton(onClick = onDismiss) { Text("关闭") }
             }
         },
