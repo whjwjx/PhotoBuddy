@@ -82,7 +82,7 @@ data class HomeUiState(
     val assets: List<MediaAsset> = emptyList(),
     val statuses: List<MediaStatusEntity> = emptyList(),
     val queues: List<MediaQueue> = emptyList(),
-    val queueType: QueueType = QueueType.UNPROCESSED,
+    val queueType: QueueType = QueueType.RANDOM,
     val queueTitle: String = "",
     /** 当前队列的卡片列表，卡片流在其上推进。 */
     val queueItems: List<MediaAsset> = emptyList(),
