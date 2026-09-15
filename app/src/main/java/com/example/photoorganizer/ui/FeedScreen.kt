@@ -236,6 +236,7 @@ fun FeedScreen(
                         currentIndex = state.currentIndex,
                         onPick = { vm.setIndex(it) },
                         onLaterAll = { vm.deferCurrentSimilarGroup() },
+                        onKeepCurrent = { vm.keepCurrentSimilarAndTrashPeers() },
                     )
                 }
                 AssetCaption(asset = asset)
@@ -515,6 +516,7 @@ private fun SimilarComparisonStrip(
     currentIndex: Int,
     onPick: (Int) -> Unit,
     onLaterAll: () -> Unit,
+    onKeepCurrent: () -> Unit,
 ) {
     val selectedPosition = candidates.indexOfFirst { it.index == currentIndex }.takeIf { it >= 0 } ?: 0
     val current = candidates.getOrNull(selectedPosition)?.asset
@@ -557,8 +559,13 @@ private fun SimilarComparisonStrip(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            TextButton(onClick = onLaterAll) {
-                Text("本组稍后", color = Color.White)
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onLaterAll) {
+                    Text("本组稍后", color = Color.White)
+                }
+                TextButton(onClick = onKeepCurrent) {
+                    Text("留当前", color = Color.White)
+                }
             }
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

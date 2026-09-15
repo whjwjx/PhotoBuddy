@@ -396,6 +396,78 @@ class HomeViewModel(
         }
     }
 
+    /** 相似照片队列的一步决策：保留当前候选，其余只进入待删除复核页。 */
+    fun keepCurrentSimilarAndTrashPeers() {
+        val s = _uiState.value
+        val current = s.current ?: return
+        if (s.queueType != QueueType.SIMILAR) return
+        val targets = s.queueItems.filter { QueueEngine.isSimilarGroupPeer(current, it) }
+        if (targets.size < 2) return
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val targetIds = targets.map { it.id }.toSet()
+            val trashCount = targets.count { it.id != current.id }
+            val undoItems =
+                targets.map { asset ->
+                    UndoItem(
+                        mediaId = asset.id,
+                        mediaName = asset.displayName,
+                        mediaType = asset.mediaType.name,
+                        beforeStatus = dao.get(asset.id)?.status.orEmpty().ifEmpty { null },
+                    )
+                }
+            val undo =
+                UndoState(
+                    mediaId = current.id,
+                    mediaName = "${targets.size} 张相似照片",
+                    mediaType = current.mediaType.name,
+                    beforeStatus = null,
+                    items = undoItems,
+                    message = "已保留当前，$trashCount 张加入待删除",
+                    createdAt = now,
+                )
+            _uiState.update { it.copy(undo = undo, feedbackMessage = undo.message) }
+            targets.forEach { asset ->
+                val status = if (asset.id == current.id) MediaStatus.KEEP else MediaStatus.TRASH
+                val before = dao.get(asset.id)?.status.orEmpty()
+                dao.upsert(toEntity(asset, status))
+                logDao.insert(
+                    UserActionLogEntity(
+                        mediaId = asset.id,
+                        mediaName = asset.displayName,
+                        mediaType = asset.mediaType.name,
+                        action = status.value,
+                        source = s.queueSource,
+                        beforeState = before,
+                        afterState = status.value,
+                        freedBytes = 0L,
+                        createdAt = now,
+                    ),
+                )
+            }
+            settingsRepo.addProcessed(targets.size)
+            clearFeedbackAfterDelay(undo)
+            _uiState.update { state ->
+                val updatedStatuses =
+                    state.statuses.filterNot { it.localAssetId in targetIds } +
+                        targets.map { asset ->
+                            toEntity(
+                                asset,
+                                if (asset.id == current.id) MediaStatus.KEEP else MediaStatus.TRASH,
+                            )
+                        }
+                recompute(
+                    state.copy(
+                        statuses = updatedStatuses,
+                        processedCount = state.processedCount + targets.size,
+                        undo = undo,
+                        feedbackMessage = undo.message,
+                    ),
+                )
+            }
+        }
+    }
+
     /** 待删除页发起真实删除：优先移入系统回收站，失败时才使用系统永久删除请求兜底。 */
     fun requestDeleteTrash(ids: Set<Long>) {
         val s = _uiState.value
