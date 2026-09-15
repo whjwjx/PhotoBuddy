@@ -363,18 +363,20 @@ private fun TrashActionBar(
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Text(
-                        if (selectedCount > 0) "已选 $selectedCount 项" else "未选择照片",
+                        if (selectedCount > 0) "已选 $selectedCount 项待复核" else "先选择要处理的照片",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
                         if (selectedCount > 0) {
-                            "预计释放 ${formatBytes(selectedBytes)}"
+                            "预计释放 ${formatBytes(selectedBytes)}，系统确认后才计入已释放"
                         } else {
-                            "选择后可恢复或移入最近删除"
+                            "可恢复到未整理，也可进入系统删除确认"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -386,7 +388,7 @@ private fun TrashActionBar(
                 ) {
                     Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.size(6.dp))
-                    Text("恢复")
+                    Text("恢复到未整理", maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Button(
                     onClick = onDelete,
@@ -395,9 +397,20 @@ private fun TrashActionBar(
                 ) {
                     Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.size(6.dp))
-                    Text(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "移入最近删除" else "删除")
+                    Text(
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "移入最近删除" else "永久删除",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
+            Text(
+                deletePolicyText(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
