@@ -91,8 +91,8 @@ internal fun QueueFilterSheet(
                 .thenByDescending { it.items.size }
                 .thenBy { it.displayName },
         )
-    val currentTotal = state.queueItems.size
-    val currentDone = (currentTotal - state.remaining).coerceIn(0, currentTotal)
+    val currentTotal = state.processedCount + state.queueItems.size
+    val currentDone = state.processedCount.coerceIn(0, currentTotal)
     val currentProgress = if (currentTotal == 0) 1f else currentDone.toFloat() / currentTotal
     val scopeLabel = queueScopeLabel(state)
     val hasActiveFilters = state.filterType != null || state.filterBucket != null
@@ -118,7 +118,7 @@ internal fun QueueFilterSheet(
                     Text("当前短队列", style = MaterialTheme.typography.labelSmall)
                     Text(state.queueSource, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "已整理 $currentDone / $currentTotal · 剩余 ${state.remaining} 项",
+                        "本次已整理 $currentDone / $currentTotal · 当前剩余 ${state.remaining} 项",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
