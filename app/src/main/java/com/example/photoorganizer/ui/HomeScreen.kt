@@ -392,6 +392,7 @@ private fun QueueGrid(
                                 QueueType.SCREENSHOT -> Icons.Default.ImageSearch
                                 QueueType.LARGE_VIDEO -> Icons.Default.Movie
                                 QueueType.RECENT_30 -> Icons.Default.Today
+                                QueueType.ON_THIS_DAY -> Icons.Default.Today
                                 QueueType.LATER -> Icons.Default.Schedule
                                 QueueType.FAVORITE -> Icons.Default.AutoAwesome
                                 else -> Icons.Default.PhotoLibrary
@@ -410,6 +411,7 @@ private fun buildHomeQueues(queues: List<MediaQueue>): List<MediaQueue> {
     val priority =
         listOf(
             QueueType.RANDOM,
+            QueueType.ON_THIS_DAY,
             QueueType.UNPROCESSED,
             QueueType.LATER,
             QueueType.SIMILAR,
@@ -501,6 +503,7 @@ private fun queueBadge(queue: MediaQueue): String =
             QueueType.SCREENSHOT -> "清理"
             QueueType.LARGE_VIDEO -> "空间"
             QueueType.RECENT_30 -> "新增"
+            QueueType.ON_THIS_DAY -> "回忆"
             QueueType.LATER -> "回看"
             QueueType.FAVORITE -> "收藏"
             QueueType.MONTH -> "回顾"
@@ -518,6 +521,7 @@ private fun queueHelper(queue: MediaQueue): String =
             QueueType.SCREENSHOT -> "快速清理截图"
             QueueType.LARGE_VIDEO -> "优先查看大文件"
             QueueType.RECENT_30 -> "整理最近新增"
+            QueueType.ON_THIS_DAY -> "回看往年今天"
             QueueType.LATER -> "继续处理稍后照片"
             QueueType.FAVORITE -> "回看收藏照片"
             QueueType.MONTH -> "按月份回看"

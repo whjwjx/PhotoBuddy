@@ -43,6 +43,7 @@ import com.example.photoorganizer.domain.LibraryStats
 import com.example.photoorganizer.domain.MediaQueue
 import com.example.photoorganizer.domain.QueueType
 import com.example.photoorganizer.domain.StatsService
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 private const val RECENT_QUEUE_DAYS = 30L
@@ -90,6 +91,7 @@ fun StatsScreen(
                 QueueType.RANDOM,
                 QueueType.LATER,
                 QueueType.SIMILAR,
+                QueueType.ON_THIS_DAY,
                 QueueType.SCREENSHOT,
                 QueueType.LARGE_VIDEO,
                 QueueType.RECENT_30,
@@ -380,6 +382,25 @@ private fun queueProgressTotal(
         QueueType.RECENT_30 -> {
             val cutoff = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(RECENT_QUEUE_DAYS)
             state.assets.count { it.capturedAt > 0 && it.capturedAt >= cutoff }
+        }
+        QueueType.ON_THIS_DAY -> {
+            val today = Calendar.getInstance()
+            state.assets.count { asset ->
+                val ms =
+                    when {
+                        asset.capturedAt > 0L -> asset.capturedAt
+                        asset.dateAdded > 0L -> asset.dateAdded * 1000L
+                        else -> 0L
+                    }
+                if (ms <= 0L) {
+                    false
+                } else {
+                    val captured = Calendar.getInstance().apply { timeInMillis = ms }
+                    captured.get(Calendar.YEAR) < today.get(Calendar.YEAR) &&
+                        captured.get(Calendar.MONTH) == today.get(Calendar.MONTH) &&
+                        captured.get(Calendar.DAY_OF_MONTH) == today.get(Calendar.DAY_OF_MONTH)
+                }
+            }
         }
         QueueType.SIMILAR -> null
         QueueType.MONTH -> queue.items.size

@@ -12,6 +12,7 @@ enum class QueueType(val label: String) {
     LARGE_VIDEO("大视频"),
     SIMILAR("相似照片"),
     RECENT_30("最近 30 天"),
+    ON_THIS_DAY("往年今日"),
     MONTH("按月份"),
     UNPROCESSED("未整理"),
     LATER("稍后"),
@@ -63,6 +64,7 @@ object QueueEngine {
             "",
             unprocessed.filter { it.capturedAt > 0 && it.capturedAt >= now - 30 * DAY_MS },
         )
+        out += queue(QueueType.ON_THIS_DAY, "", onThisDayCandidates(unprocessed, now))
         out += queue(QueueType.UNPROCESSED, "", unprocessed)
         out += queue(QueueType.LATER, "", later)
         out += queue(QueueType.FAVORITE, "", favorites)
@@ -102,6 +104,27 @@ object QueueEngine {
             .filter { it.size >= 2 }
             .flatten()
             .sortedWith(compareBy<MediaAsset> { it.bucketName }.thenBy { captureOrAddedMs(it) }.thenBy { it.id })
+
+    private fun onThisDayCandidates(
+        assets: List<MediaAsset>,
+        now: Long,
+    ): List<MediaAsset> {
+        val today = Calendar.getInstance().apply { timeInMillis = now }
+        return assets
+            .filter { asset -> isOnThisDayFromPastYear(captureOrAddedMs(asset), today) }
+            .sortedByDescending { captureOrAddedMs(it) }
+    }
+
+    private fun isOnThisDayFromPastYear(
+        ms: Long,
+        today: Calendar,
+    ): Boolean {
+        if (ms <= 0L) return false
+        val captured = Calendar.getInstance().apply { timeInMillis = ms }
+        return captured.get(Calendar.YEAR) < today.get(Calendar.YEAR) &&
+            captured.get(Calendar.MONTH) == today.get(Calendar.MONTH) &&
+            captured.get(Calendar.DAY_OF_MONTH) == today.get(Calendar.DAY_OF_MONTH)
+    }
 
     private fun monthKey(ms: Long): String {
         if (ms <= 0) return "未知时间"

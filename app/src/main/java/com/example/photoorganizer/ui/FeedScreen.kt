@@ -1462,6 +1462,7 @@ private fun suggestedNextQueue(state: HomeUiState): MediaQueue? {
     val priority =
         listOf(
             QueueType.RANDOM,
+            QueueType.ON_THIS_DAY,
             QueueType.UNPROCESSED,
             QueueType.LATER,
             QueueType.SIMILAR,
