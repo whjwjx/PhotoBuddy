@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,6 +70,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -455,6 +457,7 @@ private fun FeedPage(
     onNextSimilar: () -> Unit,
     onDragFeedback: (Float, Float) -> Unit,
 ) {
+    var zoomed by remember(asset.id) { mutableStateOf(false) }
     Box(
         Modifier
             .fillMaxSize()
@@ -500,6 +503,25 @@ private fun FeedPage(
             Modifier
                 .fillMaxSize()
                 .offset { photoOffset }
+                .graphicsLayer {
+                    val imageScale =
+                        if (asset.mediaType == MediaType.IMAGE && zoomed) {
+                            1.85f
+                        } else {
+                            1f
+                        }
+                    scaleX = imageScale
+                    scaleY = imageScale
+                }
+                .pointerInput(asset.id, asset.mediaType) {
+                    detectTapGestures(
+                        onDoubleTap = {
+                            if (asset.mediaType == MediaType.IMAGE) {
+                                zoomed = !zoomed
+                            }
+                        },
+                    )
+                }
         if (asset.mediaType == MediaType.VIDEO) {
             VideoPage(uri = asset.uri, active = true, modifier = mediaModifier)
         } else {
