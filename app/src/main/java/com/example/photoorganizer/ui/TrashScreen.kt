@@ -313,6 +313,7 @@ fun TrashScreen(onExit: () -> Unit) {
         DeleteConfirmDialog(
             count = pendingAssets.size,
             bytes = pendingAssets.sumOf { it.size },
+            sources = pendingAssets.map { it.sourceName() },
             onConfirm = {
                 vm.requestDeleteTrash(pendingDeleteIds)
                 pendingDeleteIds = emptySet()
@@ -623,19 +624,48 @@ private fun TrashPreviewDialog(
 private fun DeleteConfirmDialog(
     count: Int,
     bytes: Long,
+    sources: List<String>,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val canUseRecentDelete = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+    val sourceText = sourceSummary(sources)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "移入最近删除 $count 项？" else "永久删除 $count 项？")
+            Text(if (canUseRecentDelete) "移入最近删除 $count 项？" else "永久删除 $count 项？")
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("预计释放 ${formatBytes(bytes)}。系统确认前，这些照片仍只是在 App 的待删除列表中。")
                 Text(
-                    deletePolicyText(),
+                    if (canUseRecentDelete) {
+                        "这些照片将移入系统最近删除，可在系统相册中恢复。"
+                    } else {
+                        "这些照片将从设备永久删除，删除后无法通过本应用恢复。"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color =
+                        if (canUseRecentDelete) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
+                )
+                Text("预计释放 ${formatBytes(bytes)}。系统确认前，这些照片仍只是在待删除列表中。")
+                if (sourceText != null) {
+                    Text(
+                        "来源：$sourceText",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    if (canUseRecentDelete) {
+                        "如果系统拒绝或部分失败，未移除的照片会继续留在这里。"
+                    } else {
+                        "请先确认选中的缩略图和来源相册，再继续删除。"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -643,7 +673,7 @@ private fun DeleteConfirmDialog(
         },
         confirmButton = {
             Button(onClick = onConfirm) {
-                Text(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "移入最近删除" else "永久删除")
+                Text(if (canUseRecentDelete) "移入最近删除" else "永久删除")
             }
         },
         dismissButton = {
@@ -652,6 +682,16 @@ private fun DeleteConfirmDialog(
             }
         },
     )
+}
+
+private fun sourceSummary(sources: List<String>): String? {
+    val uniqueSources = sources.filter { it.isNotBlank() }.distinct().sorted()
+    return when (uniqueSources.size) {
+        0 -> null
+        1 -> uniqueSources.first()
+        2 -> uniqueSources.joinToString("、")
+        else -> uniqueSources.take(2).joinToString("、") + " 等 ${uniqueSources.size} 个来源"
+    }
 }
 
 @Composable
