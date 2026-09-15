@@ -302,7 +302,7 @@ private fun queueRowPurpose(queue: MediaQueue): String =
         QueueType.SCREENSHOT -> "集中清理截图"
         QueueType.LARGE_VIDEO -> "优先处理占空间的视频"
         QueueType.RECENT_30 -> "整理最近新增内容"
-        QueueType.FAVORITE -> "回看系统或 App 收藏"
+        QueueType.FAVORITE -> "回看系统或应用收藏"
         QueueType.MONTH -> "按月份慢慢回顾"
     }
 

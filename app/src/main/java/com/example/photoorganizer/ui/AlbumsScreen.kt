@@ -287,7 +287,7 @@ private fun AlbumList(
             modifier = Modifier.fillMaxWidth(),
         )
         Text(
-            "这里的相册用于 App 内快速归类，不会移动系统相册文件。",
+            "这些相册用于整理页快速归类，不会移动系统相册文件。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -442,7 +442,7 @@ private fun AlbumRow(
                 )
                 Text(
                     buildString {
-                        append("$count 项")
+                        append("$count 项 · 整理页归类")
                         if (pinned) append(" · 已置顶")
                         if (hidden) append(" · 已隐藏于快捷区")
                     },
