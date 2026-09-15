@@ -323,7 +323,7 @@ private fun QueueSheetSectionTitle(
 private fun queueRowMeta(queue: MediaQueue): String =
     buildString {
         if (queue.items.isEmpty()) {
-            append("暂无可整理内容")
+            append(emptyQueueMeta(queue))
         } else {
             append("${queue.items.size} 项")
             if (queue.estimatedSavingBytes > 0L) {
@@ -356,6 +356,13 @@ private fun queueRowPurpose(queue: MediaQueue): String =
         QueueType.RECENT_30 -> "整理最近新增内容"
         QueueType.FAVORITE -> "回看系统或应用收藏"
         QueueType.MONTH -> "按月份慢慢回顾"
+    }
+
+private fun emptyQueueMeta(queue: MediaQueue): String =
+    when (queue.type) {
+        QueueType.ON_THIS_DAY -> "今天暂无待整理回忆"
+        QueueType.MONTH -> "没有待整理月份"
+        else -> "没有待处理照片"
     }
 
 private fun queuePriority(queue: MediaQueue): Int =

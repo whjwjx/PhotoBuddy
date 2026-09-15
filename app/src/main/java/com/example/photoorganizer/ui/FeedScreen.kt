@@ -152,7 +152,8 @@ fun FeedScreen(
         if (asset == null) {
             val nextQueue = remember(state.queues, state.queueType, state.queueTitle) { suggestedNextQueue(state) }
             EmptyQueue(
-                title = if (state.undo != null) "这个队列刷完啦" else "这个队列没有内容",
+                title = emptyQueueTitle(state),
+                detail = emptyQueueDetail(state),
                 nextQueue = nextQueue,
                 onNextQueue = {
                     nextQueue?.let { vm.selectQueue(it) }
@@ -1810,6 +1811,7 @@ private fun formatTimeSpan(ms: Long): String {
 @Composable
 private fun EmptyQueue(
     title: String,
+    detail: String,
     nextQueue: MediaQueue?,
     onNextQueue: () -> Unit,
     onExit: () -> Unit,
@@ -1817,9 +1819,9 @@ private fun EmptyQueue(
 ) {
     val supportingText =
         if (nextQueue == null) {
-            "没有可继续的短队列。回首页复核待删除，或重新扫描后继续整理。"
+            detail
         } else {
-            "建议继续「${nextQueue.displayName}」：${nextQueue.items.size} 项" +
+            detail + "\n建议继续「${nextQueue.displayName}」：${nextQueue.items.size} 项" +
                 if (nextQueue.estimatedSavingBytes > 0L) {
                     " · 合计 ${formatBytes(nextQueue.estimatedSavingBytes)}"
                 } else {
@@ -1857,6 +1859,27 @@ private fun EmptyQueue(
         TextButton(onClick = onExit) { Text("回首页", color = Color.White) }
     }
 }
+
+private fun emptyQueueTitle(state: HomeUiState): String =
+    when {
+        state.undo != null -> "这个队列刷完啦"
+        state.queueType == QueueType.ON_THIS_DAY -> "今天暂无待整理回忆"
+        state.queueType == QueueType.MONTH ->
+            if (state.queueTitle.isNotBlank()) {
+                "${state.queueTitle} 已整理完"
+            } else {
+                "没有待整理月份"
+            }
+        else -> "这个队列没有内容"
+    }
+
+private fun emptyQueueDetail(state: HomeUiState): String =
+    when {
+        state.undo != null -> "刚刚的操作可以撤销，也可以切换到下一个短队列。"
+        state.queueType == QueueType.ON_THIS_DAY -> "往年今天没有待处理照片，可以回首页选择其他短队列。"
+        state.queueType == QueueType.MONTH -> "这个月份暂时没有待处理照片，可以切换其他月份或队列。"
+        else -> "没有可继续的短队列。回首页复核待删除，或重新扫描后继续整理。"
+    }
 
 private fun suggestedNextQueue(state: HomeUiState): MediaQueue? {
     val priority =

@@ -301,7 +301,7 @@ private fun HomeEntryGrid(
             HomeEntryCard(
                 label = "On This Day",
                 title = "往年今日",
-                detail = queueEntryDetail(onThisDayQueue),
+                detail = queueEntryDetail(onThisDayQueue, "今天暂无待整理回忆"),
                 icon = Icons.Default.Today,
                 enabled = onThisDayQueue?.items?.isNotEmpty() == true,
                 modifier = Modifier.weight(1f),
@@ -312,7 +312,7 @@ private fun HomeEntryGrid(
             HomeEntryCard(
                 label = "Monthly",
                 title = monthQueue?.title?.takeIf { it.isNotBlank() } ?: "按月份",
-                detail = queueEntryDetail(monthQueue),
+                detail = queueEntryDetail(monthQueue, "没有待整理月份"),
                 icon = Icons.Default.Today,
                 enabled = monthQueue?.items?.isNotEmpty() == true,
                 modifier = Modifier.weight(1f),
@@ -423,11 +423,14 @@ private fun HomeEntryCard(
     }
 }
 
-private fun queueEntryDetail(queue: MediaQueue?): String =
+private fun queueEntryDetail(
+    queue: MediaQueue?,
+    emptyText: String = "暂无待整理",
+): String =
     if (queue?.items?.isNotEmpty() == true) {
         "${queue.items.size} 项待整理"
     } else {
-        "暂无待整理"
+        emptyText
     }
 
 @Composable
@@ -631,7 +634,11 @@ private fun queueBadge(queue: MediaQueue): String =
 
 private fun queueHelper(queue: MediaQueue): String =
     if (queue.items.isEmpty()) {
-        "这个队列已清空"
+        when (queue.type) {
+            QueueType.ON_THIS_DAY -> "今天没有待整理回忆"
+            QueueType.MONTH -> "没有待整理月份"
+            else -> "这个队列已清空"
+        }
     } else {
         when (queue.type) {
             QueueType.RANDOM -> "从一组轻量判断开始"
