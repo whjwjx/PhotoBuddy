@@ -281,10 +281,6 @@ fun TrashScreen(onExit: () -> Unit) {
                 selectedIds = selectedIds - asset.id
                 previewAsset = null
             },
-            onDelete = {
-                vm.requestDeleteTrash(setOf(asset.id))
-                previewAsset = null
-            },
             onDismiss = { previewAsset = null },
         )
     }
@@ -579,7 +575,6 @@ private fun TrashPreviewDialog(
     asset: MediaAsset,
     onRestore: () -> Unit,
     onKeep: () -> Unit,
-    onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -607,14 +602,13 @@ private fun TrashPreviewDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onDelete) {
-                Text(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "移入最近删除" else "永久删除")
+            Button(onClick = onKeep) {
+                Text("标记保留")
             }
         },
         dismissButton = {
             Row {
                 TextButton(onClick = onRestore) { Text("恢复到未整理") }
-                TextButton(onClick = onKeep) { Text("标记保留") }
                 TextButton(onClick = onDismiss) { Text("关闭") }
             }
         },
