@@ -141,6 +141,7 @@ fun AppRoot(
                     onInitialQueueConsumed = { pendingQueueTypeName = null },
                     onExit = { tab = AppTab.HOME },
                     onOpenTrash = { tab = AppTab.TRASH },
+                    onOpenAlbums = { tab = AppTab.ALBUMS },
                 )
                 AppTab.TRASH -> TrashScreen(onExit = { tab = AppTab.HOME })
                 AppTab.ALBUMS -> AlbumsScreen(onStartOrganize = { tab = AppTab.ORGANIZE })

@@ -116,6 +116,7 @@ fun FeedScreen(
     onInitialQueueConsumed: () -> Unit = {},
     onExit: () -> Unit,
     onOpenTrash: () -> Unit,
+    onOpenAlbums: () -> Unit,
 ) {
     val vm: HomeViewModel = viewModel()
     val state by vm.uiState.collectAsState()
@@ -314,6 +315,10 @@ fun FeedScreen(
                 showAddAlbum = false
             },
             onManage = { albumActionTarget = it },
+            onOpenAlbumManager = {
+                showAddAlbum = false
+                onOpenAlbums()
+            },
             onDismiss = { showAddAlbum = false },
         )
     }
@@ -1405,6 +1410,7 @@ private fun AlbumPickerSheet(
     onCreateAndPick: (String) -> Unit,
     onPick: (Long) -> Unit,
     onManage: (AlbumEntity) -> Unit,
+    onOpenAlbumManager: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
@@ -1449,6 +1455,14 @@ private fun AlbumPickerSheet(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            Button(
+                onClick = onOpenAlbumManager,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Default.PhotoAlbum, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("添加已有系统相册")
             }
             OutlinedTextField(
                 value = query,
