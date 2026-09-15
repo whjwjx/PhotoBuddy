@@ -168,44 +168,25 @@ fun TrashScreen(onExit: () -> Unit) {
                     .padding(padding)
                     .padding(horizontal = 12.dp),
             ) {
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
-                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            if (sourceFilter == null) {
-                                "${items.size} 项等待复核"
-                            } else {
-                                "$sourceFilter · ${visibleItems.size} 项"
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            "确认前不会删除；恢复会回到未整理队列，删除会先交给系统确认。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        TrashReviewSummary(
-                            totalCount = items.size,
-                            totalBytes = totalBytes,
-                            visibleCount = visibleItems.size,
-                            visibleBytes = visibleBytes,
-                            selectedCount = selectedIds.size,
-                            selectedBytes = selectedBytes,
-                            filtered = sourceFilter != null,
-                            onRestoreAll = {
-                                vm.restoreFromTrash(visibleIds)
-                                selectedIds = emptySet()
-                            },
-                        )
-                        Text(
-                            deletePolicyText(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
+                TrashReviewHeader(
+                    title =
+                        if (sourceFilter == null) {
+                            "待删除复核"
+                        } else {
+                            sourceFilter.orEmpty()
+                        },
+                    totalCount = items.size,
+                    totalBytes = totalBytes,
+                    visibleCount = visibleItems.size,
+                    visibleBytes = visibleBytes,
+                    selectedCount = selectedIds.size,
+                    selectedBytes = selectedBytes,
+                    filtered = sourceFilter != null,
+                    onRestoreAll = {
+                        vm.restoreFromTrash(visibleIds)
+                        selectedIds = emptySet()
+                    },
+                )
                 state.error?.let { message ->
                     Spacer(Modifier.height(10.dp))
                     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
@@ -251,16 +232,7 @@ fun TrashScreen(onExit: () -> Unit) {
                     onSelect = { sourceFilter = it },
                 )
                 Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    TrashSort.entries.forEach { option ->
-                        OutlinedButton(
-                            onClick = { sort = option },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text(if (sort == option) "${option.label}优先" else option.label)
-                        }
-                    }
-                }
+                TrashSortRow(sort = sort, onSelect = { sort = it })
                 Spacer(Modifier.height(8.dp))
                 if (visibleItems.isEmpty()) {
                     EmptyFilteredTrash(Modifier.fillMaxSize())
@@ -386,25 +358,63 @@ private fun SourceFilterRow(
     selected: String?,
     onSelect: (String?) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            "按来源相册复核",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            item {
-                FilterChipButton(
-                    text = "全部 · ${options.sumOf { it.second }}",
-                    selected = selected == null,
-                    onClick = { onSelect(null) },
-                )
-            }
-            lazyItems(options, key = { it.first }) { (name, count) ->
-                FilterChipButton(
-                    text = "$name · $count",
-                    selected = selected == name,
-                    onClick = { onSelect(name) },
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        item {
+            FilterChipButton(
+                text = "全部 · ${options.sumOf { it.second }}",
+                selected = selected == null,
+                onClick = { onSelect(null) },
+            )
+        }
+        lazyItems(options, key = { it.first }) { (name, count) ->
+            FilterChipButton(
+                text = "$name · $count",
+                selected = selected == name,
+                onClick = { onSelect(name) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrashSortRow(
+    sort: TrashSort,
+    onSelect: (TrashSort) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.44f), RoundedCornerShape(8.dp))
+                .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        TrashSort.entries.forEach { option ->
+            val selected = sort == option
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.surface else Color.Transparent,
+                            RoundedCornerShape(6.dp),
+                        )
+                        .clickable { onSelect(option) }
+                        .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    if (selected) "${option.label}优先" else option.label,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    color =
+                        if (selected) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -705,7 +715,8 @@ private fun sourceSummary(sources: List<String>): String? {
 }
 
 @Composable
-private fun TrashReviewSummary(
+private fun TrashReviewHeader(
+    title: String,
     totalCount: Int,
     totalBytes: Long,
     visibleCount: Int,
@@ -715,40 +726,80 @@ private fun TrashReviewSummary(
     filtered: Boolean,
     onRestoreAll: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            TrashSummaryPill(
-                label = if (filtered) "当前来源" else "全部待删",
-                value =
-                    if (filtered) {
-                        "$visibleCount 项"
-                    } else {
-                        "$totalCount 项"
-                    },
-                helper =
-                    if (filtered) {
-                        formatBytes(visibleBytes)
-                    } else {
-                        formatBytes(totalBytes)
-                    },
-                modifier = Modifier.weight(1f),
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "确认前不会删除，复核后再交给系统处理",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                TextButton(onClick = onRestoreAll, enabled = visibleCount > 0) {
+                    Text(if (filtered) "恢复本来源" else "全部恢复")
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                TrashSummaryPill(
+                    label = if (filtered) "当前来源" else "全部待删",
+                    value =
+                        if (filtered) {
+                            "$visibleCount 项"
+                        } else {
+                            "$totalCount 项"
+                        },
+                    helper =
+                        if (filtered) {
+                            formatBytes(visibleBytes)
+                        } else {
+                            formatBytes(totalBytes)
+                        },
+                    modifier = Modifier.weight(1f),
+                )
+                TrashSummaryPill(
+                    label = "已选",
+                    value = "$selectedCount 项",
+                    helper =
+                        if (selectedCount > 0) {
+                            formatBytes(selectedBytes)
+                        } else {
+                            "点缩略图右上角选择"
+                        },
+                    modifier = Modifier.weight(1f),
+                )
+                TrashSummaryPill(
+                    label = "删除方式",
+                    value =
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            "最近删除"
+                        } else {
+                            "永久删除"
+                        },
+                    helper = "系统确认后生效",
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Text(
+                if (filtered) {
+                    "正在按来源筛选；切回「全部」可复核完整待删除列表。"
+                } else {
+                    "上滑加入的照片会先停在这里，适合集中恢复或确认删除。"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
-            TrashSummaryPill(
-                label = "已选",
-                value = "$selectedCount 项",
-                helper = formatBytes(selectedBytes),
-                modifier = Modifier.weight(1f),
-            )
-        }
-        OutlinedButton(
-            onClick = onRestoreAll,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = visibleCount > 0,
-            shape = RoundedCornerShape(8.dp),
-        ) {
-            Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.size(6.dp))
-            Text(if (filtered) "恢复当前来源到未整理" else "全部恢复到未整理")
         }
     }
 }
@@ -834,10 +885,3 @@ private fun List<MediaAsset>.sumSelectedBytes(selectedIds: Set<Long>): Long =
 
 private fun MediaAsset.sourceName(): String =
     bucketName.ifBlank { "未知来源" }
-
-private fun deletePolicyText(): String =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        "确认前不会删除。确认后会请求系统移入最近删除，可在系统相册中恢复；若系统拒绝，本页会保留待删除状态。"
-    } else {
-        "确认前不会删除。当前系统可能不支持最近删除，确认后可能从设备永久删除。"
-    }
