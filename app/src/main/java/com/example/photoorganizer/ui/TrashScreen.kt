@@ -192,6 +192,10 @@ fun TrashScreen(onExit: () -> Unit) {
                             selectedCount = selectedIds.size,
                             selectedBytes = selectedBytes,
                             filtered = sourceFilter != null,
+                            onRestoreAll = {
+                                vm.restoreFromTrash(visibleIds)
+                                selectedIds = emptySet()
+                            },
                         )
                         Text(
                             deletePolicyText(),
@@ -709,30 +713,43 @@ private fun TrashReviewSummary(
     selectedCount: Int,
     selectedBytes: Long,
     filtered: Boolean,
+    onRestoreAll: () -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        TrashSummaryPill(
-            label = if (filtered) "当前来源" else "全部待删",
-            value =
-                if (filtered) {
-                    "$visibleCount 项"
-                } else {
-                    "$totalCount 项"
-                },
-            helper =
-                if (filtered) {
-                    formatBytes(visibleBytes)
-                } else {
-                    formatBytes(totalBytes)
-                },
-            modifier = Modifier.weight(1f),
-        )
-        TrashSummaryPill(
-            label = "已选",
-            value = "$selectedCount 项",
-            helper = formatBytes(selectedBytes),
-            modifier = Modifier.weight(1f),
-        )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            TrashSummaryPill(
+                label = if (filtered) "当前来源" else "全部待删",
+                value =
+                    if (filtered) {
+                        "$visibleCount 项"
+                    } else {
+                        "$totalCount 项"
+                    },
+                helper =
+                    if (filtered) {
+                        formatBytes(visibleBytes)
+                    } else {
+                        formatBytes(totalBytes)
+                    },
+                modifier = Modifier.weight(1f),
+            )
+            TrashSummaryPill(
+                label = "已选",
+                value = "$selectedCount 项",
+                helper = formatBytes(selectedBytes),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        OutlinedButton(
+            onClick = onRestoreAll,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = visibleCount > 0,
+            shape = RoundedCornerShape(8.dp),
+        ) {
+            Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.size(6.dp))
+            Text(if (filtered) "恢复当前来源到未整理" else "全部恢复到未整理")
+        }
     }
 }
 
