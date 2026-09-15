@@ -105,6 +105,7 @@ data class HomeUiState(
     val hiddenAlbumIds: Set<Long> = emptySet(),
     val albumOrderIds: List<Long> = emptyList(),
     val feedActionBarExpanded: Boolean = false,
+    val feedGestureGuideSeen: Boolean = false,
     val openAlbumId: Long? = null,
     val openAlbumMediaIds: List<Long> = emptyList(),
     // --- P4：增量扫描 / 每日整理任务 ---
@@ -216,6 +217,11 @@ class HomeViewModel(
         viewModelScope.launch {
             settingsRepo.feedActionBarExpanded.collect { expanded ->
                 _uiState.update { it.copy(feedActionBarExpanded = expanded) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepo.feedGestureGuideSeen.collect { seen ->
+                _uiState.update { it.copy(feedGestureGuideSeen = seen) }
             }
         }
         viewModelScope.launch {
@@ -810,6 +816,12 @@ class HomeViewModel(
     fun setFeedActionBarExpanded(expanded: Boolean) {
         viewModelScope.launch {
             settingsRepo.setFeedActionBarExpanded(expanded)
+        }
+    }
+
+    fun setFeedGestureGuideSeen(seen: Boolean) {
+        viewModelScope.launch {
+            settingsRepo.setFeedGestureGuideSeen(seen)
         }
     }
 

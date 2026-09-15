@@ -127,6 +127,7 @@ fun FeedScreen(
     var albumActionTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var dragX by remember { mutableStateOf(0f) }
     var dragY by remember { mutableStateOf(0f) }
+    var showGestureGuide by remember { mutableStateOf(false) }
     var appliedInitialQueueTypeName by remember { mutableStateOf<String?>(null) }
     val undoLastAction = {
         vm.clearFeedback()
@@ -145,6 +146,11 @@ fun FeedScreen(
             vm.selectQueueType(target)
             appliedInitialQueueTypeName = target
             onInitialQueueConsumed()
+        }
+    }
+    LaunchedEffect(state.current != null, state.feedGestureGuideSeen) {
+        if (state.current != null && !state.feedGestureGuideSeen) {
+            showGestureGuide = true
         }
     }
 
@@ -169,11 +175,10 @@ fun FeedScreen(
                 onUndo = undoLastAction,
                 modifier =
                     Modifier
-                        .align(Alignment.TopCenter)
+                        .align(Alignment.BottomCenter)
                         .zIndex(8f)
-                        .statusBarsPadding()
-                        .padding(horizontal = 16.dp)
-                        .padding(top = 82.dp),
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 24.dp),
             )
         } else {
             val similarCandidates =
@@ -253,6 +258,12 @@ fun FeedScreen(
                         onKeepCurrent = { vm.keepCurrentSimilarAndTrashPeers() },
                     )
                 }
+                UndoBanner(
+                    visible = state.feedbackMessage != null,
+                    message = state.feedbackMessage.orEmpty(),
+                    canUndo = state.undo != null,
+                    onUndo = undoLastAction,
+                )
                 AssetCaption(asset = asset)
                 if (state.feedActionBarExpanded) {
                     ActionBar(
@@ -280,21 +291,35 @@ fun FeedScreen(
                         expanded = state.feedActionBarExpanded,
                         onClick = { vm.setFeedActionBarExpanded(!state.feedActionBarExpanded) },
                     )
+                    GestureGuideButton(
+                        onClick = {
+                            showGestureGuide = true
+                            vm.setFeedGestureGuideSeen(true)
+                        },
+                    )
                 }
             }
 
-            UndoBanner(
-                visible = state.feedbackMessage != null,
-                message = state.feedbackMessage.orEmpty(),
-                canUndo = state.undo != null,
-                onUndo = undoLastAction,
+            DragActionHint(
+                dragX = dragX,
+                dragY = dragY,
+                similarMode = showSimilarComparison,
                 modifier =
                     Modifier
-                        .align(Alignment.TopCenter)
-                        .zIndex(8f)
-                        .statusBarsPadding()
-                        .padding(horizontal = 16.dp)
-                        .padding(top = 82.dp),
+                        .align(Alignment.Center)
+                        .zIndex(6f),
+            )
+            GestureGuideOverlay(
+                visible = showGestureGuide,
+                similarMode = showSimilarComparison,
+                onDismiss = {
+                    showGestureGuide = false
+                    vm.setFeedGestureGuideSeen(true)
+                },
+                modifier =
+                    Modifier
+                        .align(Alignment.Center)
+                        .zIndex(7f),
             )
         }
     }
@@ -619,6 +644,152 @@ private data class UndoVisual(
     val color: Color,
     val detail: String,
 )
+
+private data class SwipeActionVisual(
+    val label: String,
+    val detail: String,
+    val color: Color,
+)
+
+@Composable
+private fun DragActionHint(
+    dragX: Float,
+    dragY: Float,
+    similarMode: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val visual = swipeActionVisual(dragX, dragY, similarMode) ?: return
+    Row(
+        modifier =
+            modifier
+                .offset {
+                    IntOffset(
+                        x = (dragX * 0.16f).roundToInt(),
+                        y = (dragY * 0.16f).roundToInt(),
+                    )
+                }
+                .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(100.dp))
+                .border(BorderStroke(1.dp, visual.color.copy(alpha = 0.7f)), RoundedCornerShape(100.dp))
+                .padding(horizontal = 14.dp, vertical = 9.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(9.dp)
+                .background(visual.color, CircleShape),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+            Text(
+                visual.label,
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                visual.detail,
+                color = Color.White.copy(alpha = 0.68f),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun GestureGuideOverlay(
+    visible: Boolean,
+    similarMode: Boolean,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (!visible) return
+    Column(
+        modifier =
+            modifier
+                .widthIn(max = 300.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.Black.copy(alpha = 0.78f))
+                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)), RoundedCornerShape(12.dp))
+                .clickable(onClick = onDismiss)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            "滑动整理",
+            color = Color.White,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            GestureGuideLine("上滑", "加入待删除", Color(0xFFFF453A))
+            GestureGuideLine("下滑", "收藏", Color(0xFFFFCC00))
+            GestureGuideLine("左滑", if (similarMode) "下一张相似" else "稍后", Color(0xFF8E8E93))
+            GestureGuideLine("右滑", if (similarMode) "上一张相似" else "保留", Color(0xFF34C759))
+        }
+        Text(
+            "轻点收起",
+            color = Color.White.copy(alpha = 0.56f),
+            style = MaterialTheme.typography.labelSmall,
+        )
+    }
+}
+
+@Composable
+private fun GestureGuideLine(
+    direction: String,
+    action: String,
+    color: Color,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            direction,
+            modifier =
+                Modifier
+                    .width(48.dp)
+                    .background(color.copy(alpha = 0.2f), RoundedCornerShape(100.dp))
+                    .padding(vertical = 5.dp),
+            color = color,
+            style = MaterialTheme.typography.labelLarge,
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            action,
+            color = Color.White,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun GestureGuideButton(
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.14f))
+                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)), CircleShape)
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            "?",
+            color = Color.White.copy(alpha = 0.92f),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
 
 @Composable
 private fun SimilarComparisonStrip(
@@ -1071,6 +1242,31 @@ private fun undoVisual(message: String): UndoVisual =
         else ->
             UndoVisual(Color(0xFF34C759), "继续下一张")
     }
+
+private fun swipeActionVisual(
+    dragX: Float,
+    dragY: Float,
+    similarMode: Boolean,
+): SwipeActionVisual? {
+    val absX = abs(dragX)
+    val absY = abs(dragY)
+    if (absX < 28f && absY < 28f) return null
+    val horizontal = absX > absY
+    return when {
+        horizontal && similarMode && dragX > 0f ->
+            SwipeActionVisual("松手切到上一张", "右滑对比相似照片", Color(0xFF64D2FF))
+        horizontal && similarMode && dragX < 0f ->
+            SwipeActionVisual("松手切到下一张", "左滑对比相似照片", Color(0xFF64D2FF))
+        horizontal && dragX > 0f ->
+            SwipeActionVisual("松手保留", "右滑确认这张照片", Color(0xFF34C759))
+        horizontal && dragX < 0f ->
+            SwipeActionVisual("松手稍后", "左滑移出当前队列", Color(0xFF8E8E93))
+        !horizontal && dragY < 0f ->
+            SwipeActionVisual("松手加入待删除", "上滑进入复核页", Color(0xFFFF453A))
+        else ->
+            SwipeActionVisual("松手收藏", "下滑标为收藏", Color(0xFFFFCC00))
+    }
+}
 
 @Composable
 private fun AssetCaption(asset: MediaAsset) {

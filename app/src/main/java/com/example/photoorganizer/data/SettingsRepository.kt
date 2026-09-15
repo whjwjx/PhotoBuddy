@@ -50,6 +50,7 @@ class SettingsRepository(
         val HIDDEN_ALBUM_IDS = stringPreferencesKey("hidden_album_ids")
         val ALBUM_ORDER_IDS = stringPreferencesKey("album_order_ids")
         val FEED_ACTION_BAR_EXPANDED = booleanPreferencesKey("feed_action_bar_expanded")
+        val FEED_GESTURE_GUIDE_SEEN = booleanPreferencesKey("feed_gesture_guide_seen")
         val REMINDER_ENABLED = booleanPreferencesKey("reminder_enabled")
         val REMINDER_INTERVAL_DAYS = intPreferencesKey("reminder_interval_days")
         val QUIET_START_HOUR = intPreferencesKey("quiet_start_hour")
@@ -89,6 +90,9 @@ class SettingsRepository(
 
     val feedActionBarExpanded: Flow<Boolean> =
         context.settingsDataStore.data.map { p -> p[Keys.FEED_ACTION_BAR_EXPANDED] ?: false }
+
+    val feedGestureGuideSeen: Flow<Boolean> =
+        context.settingsDataStore.data.map { p -> p[Keys.FEED_GESTURE_GUIDE_SEEN] ?: false }
 
     suspend fun setDailyGoal(v: Int) {
         context.settingsDataStore.edit { it[Keys.DAILY_GOAL] = v }
@@ -149,6 +153,10 @@ class SettingsRepository(
 
     suspend fun setFeedActionBarExpanded(expanded: Boolean) {
         context.settingsDataStore.edit { p -> p[Keys.FEED_ACTION_BAR_EXPANDED] = expanded }
+    }
+
+    suspend fun setFeedGestureGuideSeen(seen: Boolean) {
+        context.settingsDataStore.edit { p -> p[Keys.FEED_GESTURE_GUIDE_SEEN] = seen }
     }
 
     suspend fun getLastScanMs(): Long = context.settingsDataStore.data.first()[Keys.LAST_SCAN_MS] ?: 0L
