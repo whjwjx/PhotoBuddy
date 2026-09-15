@@ -1285,7 +1285,7 @@ private fun AlbumPickerSheet(
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("加入相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
-                    "点相册后继续整理下一张",
+                    "点相册后继续下一张，不会移动系统相册文件",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

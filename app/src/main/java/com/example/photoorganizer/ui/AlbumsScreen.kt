@@ -286,6 +286,11 @@ private fun AlbumList(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        Text(
+            "这里的相册用于 App 内快速归类，不会移动系统相册文件。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (state.albums.isEmpty()) {
