@@ -1139,6 +1139,7 @@ private fun AlbumPickerSheet(
     var query by remember { mutableStateOf("") }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val trimmedQuery = query.trim()
+    val hasExactName = albums.any { it.name.equals(trimmedQuery, ignoreCase = true) }
     val sortedAlbums =
         remember(albums, counts, lastAddedAt, pinnedAlbumIds, hiddenAlbumIds) {
             sortedAlbumsForOrganize(
@@ -1184,13 +1185,19 @@ private fun AlbumPickerSheet(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            if (trimmedQuery.isNotEmpty()) {
+            if (trimmedQuery.isNotEmpty() && !hasExactName) {
                 Button(
                     onClick = { onCreateAndPick(trimmedQuery) },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("新建并加入「$trimmedQuery」")
                 }
+            } else if (trimmedQuery.isNotEmpty()) {
+                Text(
+                    "已有同名相册，点下方结果加入。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             } else {
                 Text(
                     "输入名称可直接创建，点相册会立即归类当前照片。",
