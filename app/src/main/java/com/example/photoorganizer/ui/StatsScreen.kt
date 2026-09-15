@@ -12,8 +12,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -134,15 +132,16 @@ fun StatsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("整理进度", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text(
-                        "已整理 ${state.organizedCount} / ${stats.total}，还有 ${state.unprocessedCount} 张未整理。",
-                        style = MaterialTheme.typography.bodyMedium,
+                        "今日已整理 ${state.daily.count} 张",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
                     )
-                    LinearProgressIndicator(
-                        progress = { organizedProgress },
-                        modifier = Modifier.fillMaxWidth(),
+                    Text(
+                        "预计释放 ${formatBytes(state.trashBytes)} · ${state.trashCount} 项待复核",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
                         if (state.dailyDone) {
@@ -157,6 +156,15 @@ fun StatsScreen(
                         progress = { dailyProgress },
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    Text(
+                        "整体已整理 ${state.organizedCount} / ${stats.total}，还有 ${state.unprocessedCount} 张未整理。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    LinearProgressIndicator(
+                        progress = { organizedProgress },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     recommendedQueue?.let { queue ->
                         Text(
                             "下一步建议：${queue.displayName} · ${queue.items.size} 项",
@@ -166,31 +174,17 @@ fun StatsScreen(
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { showTodayLogs = !showTodayLogs }) {
+                            Text(if (showTodayLogs) "收起今日记录" else "今日记录")
+                        }
+                        if (state.trashCount > 0) {
+                            TextButton(onClick = onOpenTrash) {
+                                Text("复核待删除")
+                            }
+                        }
+                    }
                 }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                StatMetricCard(
-                    icon = Icons.Default.Done,
-                    label = "今日",
-                    value = "${state.daily.count}/${state.settings.dailyGoal}",
-                    helper =
-                        if (state.dailyDone) {
-                            "今日目标已完成"
-                        } else {
-                            if (todayLogs.isEmpty()) "轻整理目标" else "点看今日记录"
-                        },
-                    modifier = Modifier.weight(1f),
-                    onClick = { showTodayLogs = !showTodayLogs },
-                )
-                StatMetricCard(
-                    icon = Icons.Default.DeleteOutline,
-                    label = "预计释放",
-                    value = formatBytes(state.trashBytes),
-                    helper = "${state.trashCount} 项待复核",
-                    modifier = Modifier.weight(1f),
-                    onClick = if (state.trashCount > 0) onOpenTrash else null,
-                )
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
