@@ -82,7 +82,7 @@ private data class SystemAlbumOption(
     val pendingCount: Int,
 )
 
-/** 应用内相册页：负责查看、重命名、删除相册，以及从相册中批量移除媒体。 */
+/** 应用内相册页：负责查看、重命名、移除相册映射，以及从相册中批量移出媒体。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumsScreen() {
@@ -152,7 +152,7 @@ fun AlbumsScreen(onStartOrganize: () -> Unit) {
                             Icon(Icons.Default.Edit, contentDescription = "重命名")
                         }
                         IconButton(onClick = { deleteTarget = openAlbum }) {
-                            Icon(Icons.Default.DeleteOutline, contentDescription = "删除相册")
+                            Icon(Icons.Default.DeleteOutline, contentDescription = "移除相册映射")
                         }
                     }
                 },
@@ -713,7 +713,7 @@ private fun AlbumRow(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("删除相册") },
+                        text = { Text("移除相册映射") },
                         onClick = {
                             menuExpanded = false
                             onDelete()
@@ -1147,13 +1147,24 @@ private fun DeleteAlbumDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("删除相册？") },
+        title = { Text("移除「${album.name}」映射？") },
         text = {
-            Text("只删除「${album.name}」这个相册和其中 $count 条归类记录，不会删除照片文件。")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "只会移除这个 App 内相册和其中 $count 条归类记录。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "不会删除照片文件，也不会删除系统相册；之后仍可从系统相册或“添加已有系统相册”重新导入。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         },
         confirmButton = {
             Button(onClick = onConfirm) {
-                Text("删除相册")
+                Text("移除映射")
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
