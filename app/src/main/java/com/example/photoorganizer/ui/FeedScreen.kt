@@ -1320,23 +1320,21 @@ private fun AlbumQuickBar(
                 lastAddedAt = state.albumLastAddedAt,
                 pinnedAlbumIds = state.pinnedAlbumIds,
                 hiddenAlbumIds = state.hiddenAlbumIds,
-            ).take(6)
+            ).take(5)
         }
     Box(
         Modifier
             .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.54f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 7.dp, vertical = 5.dp),
+            .background(Color.Black.copy(alpha = 0.46f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 6.dp, vertical = 5.dp),
     ) {
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             items(quickAlbums) { album ->
                 AlbumChip(
                     text = album.name,
-                    detail = "${state.albumCounts[album.id] ?: 0} 项",
-                    icon = Icons.Default.PhotoAlbum,
                     onClick = { onPick(album.id) },
                     onLongClick = { onManage(album) },
                 )
@@ -1365,13 +1363,13 @@ private fun AlbumChip(
         modifier =
             Modifier
                 .clip(RoundedCornerShape(100.dp))
-                .background(Color.White.copy(alpha = 0.16f))
-                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.34f)), RoundedCornerShape(100.dp))
+                .background(Color.White.copy(alpha = 0.14f))
+                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)), RoundedCornerShape(100.dp))
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongClick,
                 )
-                .padding(horizontal = 11.dp, vertical = 7.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1568,28 +1566,31 @@ private fun AlbumPickerSheet(
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .padding(horizontal = 18.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("归类到本地相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(
-                    "点选后立即继续下一张；只记录 App 内映射，不移动系统相册文件。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Button(
-                onClick = onOpenAlbumManager,
-                modifier = Modifier.fillMaxWidth(),
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(Icons.Default.PhotoAlbum, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("导入系统相册映射")
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("归类到相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        "点相册即归类，可撤销。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = onOpenAlbumManager) {
+                    Icon(Icons.Default.PhotoAlbum, contentDescription = null, modifier = Modifier.size(17.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("管理")
+                }
             }
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                label = { Text("搜索或新建本地相册") },
+                placeholder = { Text("搜索或新建相册") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -1608,7 +1609,7 @@ private fun AlbumPickerSheet(
                 )
             } else {
                 Text(
-                    "输入名称可直接创建本地映射，点相册会立即归类当前照片。",
+                    "输入名称可直接新建，长按相册可置顶或隐藏。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1671,7 +1672,7 @@ private fun AlbumPickerSheet(
                 )
             } else {
                 LazyColumn(
-                    modifier = Modifier.height(320.dp),
+                    modifier = Modifier.height(340.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(filtered, key = { it.id }) { album ->
