@@ -240,9 +240,9 @@ fun TrashScreen(onExit: () -> Unit) {
                     EmptyFilteredTrash(Modifier.fillMaxSize())
                 } else {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(3),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        columns = GridCells.Fixed(2),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         items(visibleItems, key = { it.id }) { asset ->
@@ -466,7 +466,7 @@ private fun TrashActionBar(
                         if (selectedCount > 0) {
                             "预计释放 ${formatBytes(selectedBytes)}，系统确认后才计入已释放"
                         } else {
-                            "批量可恢复到未整理；点开单张可直接标记保留"
+                            "点照片即可选择；长按可预览单张"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -483,7 +483,7 @@ private fun TrashActionBar(
                 ) {
                     Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.size(6.dp))
-                    Text("恢复到未整理", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("恢复", maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Button(
                     onClick = onDelete,
@@ -521,8 +521,8 @@ private fun TrashTile(
         modifier =
             Modifier
                 .combinedClickable(
-                    onClick = onOpen,
-                    onLongClick = onToggle,
+                    onClick = onToggle,
+                    onLongClick = onOpen,
                 )
                 .border(
                     width = if (selected) 2.dp else 1.dp,
@@ -536,7 +536,7 @@ private fun TrashTile(
                 ),
         shape = shape,
     ) {
-        Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.82f)) {
+        Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.92f)) {
             Column(Modifier.fillMaxSize()) {
                 AsyncImage(
                     model = asset.uri,
@@ -744,7 +744,7 @@ private fun TrashReviewHeader(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        "点图预览，长按选择；确认前不会删除",
+                        "点图选择，长按预览；确认前不会删除",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -779,7 +779,7 @@ private fun TrashReviewHeader(
                         if (selectedCount > 0) {
                             formatBytes(selectedBytes)
                         } else {
-                            "点缩略图右上角选择"
+                            "点照片即可选择"
                         },
                     modifier = Modifier.weight(1f),
                 )
