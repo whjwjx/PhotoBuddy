@@ -1,5 +1,7 @@
 package com.example.photoorganizer.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -15,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +27,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.photoorganizer.data.MediaType
@@ -105,20 +108,48 @@ internal fun QueueFilterSheet(
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .padding(horizontal = 18.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("短队列", style = MaterialTheme.typography.titleLarge)
-            Text(
-                "换一组继续，已处理进度会保留。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("切换短队列", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    "按当前范围继续整理，点队列立即进入照片流。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("当前短队列", style = MaterialTheme.typography.labelSmall)
-                    Text(state.queueSource, style = MaterialTheme.typography.titleMedium)
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("当前", style = MaterialTheme.typography.labelSmall)
+                            Text(
+                                state.queueSource,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Text(
+                            "剩余 ${state.remaining} 项",
+                            modifier =
+                                Modifier
+                                    .background(
+                                        MaterialTheme.colorScheme.secondaryContainer,
+                                        RoundedCornerShape(100.dp),
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
                     Text(
-                        "本次已整理 $currentDone / $currentTotal · 当前剩余 ${state.remaining} 项",
+                        "本次进度 $currentDone / $currentTotal",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -137,7 +168,7 @@ internal fun QueueFilterSheet(
                         )
                         if (hasActiveFilters) {
                             TextButton(onClick = onClearFilters) {
-                                Text("清除筛选")
+                                Text("重置")
                             }
                         }
                     }
@@ -145,11 +176,11 @@ internal fun QueueFilterSheet(
                         progress = { currentProgress },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(4.dp),
+                            .height(3.dp),
                     )
                 }
             }
-            QueueSheetSectionTitle("媒体类型")
+            QueueSheetSectionTitle("筛选范围")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 FilterChipButton("全部", state.filterType == null) { onFilterType(null) }
                 FilterChipButton("图片", state.filterType == MediaType.IMAGE) {
@@ -178,35 +209,39 @@ internal fun QueueFilterSheet(
                     }
                 }
             }
-            QueueSheetSectionTitle("短队列", "${sortedQueues.count { it.items.isNotEmpty() }} 个可继续")
-            LazyColumn(Modifier.height(360.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            QueueSheetSectionTitle("继续整理", "${sortedQueues.count { it.items.isNotEmpty() }} 个可继续")
+            LazyColumn(Modifier.height(332.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(sortedQueues) { q ->
                     val selected = q.type == state.queueType && q.title == state.queueTitle
                     Card(
                         modifier = Modifier.fillMaxWidth().clickable(enabled = q.items.isNotEmpty()) { onSelectQueue(q) },
                         shape = RoundedCornerShape(8.dp),
+                        colors =
+                            CardDefaults.cardColors(
+                                containerColor =
+                                    when {
+                                        selected -> MaterialTheme.colorScheme.primaryContainer
+                                        q.items.isEmpty() -> MaterialTheme.colorScheme.surfaceVariant
+                                        else -> MaterialTheme.colorScheme.surface
+                                    },
+                            ),
                     ) {
                         Row(
-                            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(
                                     q.displayName,
                                     style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
-                                    queueRowMeta(q, selected),
+                                    queueRowSubtitle(q),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    queueRowPurpose(q),
-                                    style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -214,12 +249,23 @@ internal fun QueueFilterSheet(
                             }
                             Text(
                                 if (selected) "当前" else if (q.items.isEmpty()) "完成" else "继续",
+                                modifier =
+                                    Modifier
+                                        .background(
+                                            if (selected) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.secondaryContainer
+                                            },
+                                            RoundedCornerShape(100.dp),
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
                                 style = MaterialTheme.typography.labelLarge,
                                 color =
                                     if (selected) {
-                                        MaterialTheme.colorScheme.primary
+                                        MaterialTheme.colorScheme.onPrimary
                                     } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                        MaterialTheme.colorScheme.onSecondaryContainer
                                     },
                             )
                         }
@@ -274,23 +320,28 @@ private fun QueueSheetSectionTitle(
     }
 }
 
-private fun queueRowMeta(
-    queue: MediaQueue,
-    selected: Boolean,
-): String =
+private fun queueRowMeta(queue: MediaQueue): String =
     buildString {
         if (queue.items.isEmpty()) {
             append("暂无可整理内容")
         } else {
             append("${queue.items.size} 项")
             if (queue.estimatedSavingBytes > 0L) {
-                append(" · 合计 ${formatBytes(queue.estimatedSavingBytes)}")
+                append(" · ${formatBytes(queue.estimatedSavingBytes)}")
             }
         }
-        if (selected) {
-            append(" · 正在整理")
-        }
     }
+
+private fun queueRowSubtitle(
+    queue: MediaQueue,
+): String {
+    val meta = queueRowMeta(queue)
+    return if (queue.items.isEmpty()) {
+        meta
+    } else {
+        "${queueRowPurpose(queue)} · $meta"
+    }
+}
 
 private fun queueRowPurpose(queue: MediaQueue): String =
     when (queue.type) {
