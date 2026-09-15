@@ -93,7 +93,7 @@ fun AppRoot(
 
     var tab by remember { mutableStateOf(initialTab) }
     var pendingQueueTypeName by remember { mutableStateOf(initialQueueTypeName) }
-    LaunchedEffect(initialTab) {
+    LaunchedEffect(initialQueueRequestId, initialTab) {
         tab = initialTab
     }
     LaunchedEffect(initialQueueRequestId, initialQueueTypeName) {
