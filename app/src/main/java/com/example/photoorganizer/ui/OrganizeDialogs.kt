@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.photoorganizer.data.MediaType
 import com.example.photoorganizer.domain.MediaQueue
+import com.example.photoorganizer.domain.QueueType
 
 @Composable
 internal fun FilterChipButton(
@@ -84,6 +85,7 @@ internal fun QueueFilterSheet(
         state.queues.sortedWith(
             compareByDescending<MediaQueue> { it.items.isNotEmpty() }
                 .thenBy { if (it.type == state.queueType && it.title == state.queueTitle) 0 else 1 }
+                .thenBy { queuePriority(it) }
                 .thenByDescending { it.items.size }
                 .thenBy { it.displayName },
         )
@@ -176,6 +178,15 @@ internal fun QueueFilterSheet(
                                     queueRowMeta(q, selected),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    queueRowPurpose(q),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                             Text(
@@ -235,4 +246,32 @@ private fun queueRowMeta(
         if (selected) {
             append(" · 正在整理")
         }
+    }
+
+private fun queueRowPurpose(queue: MediaQueue): String =
+    when (queue.type) {
+        QueueType.RANDOM -> "快速进入下一张判断"
+        QueueType.ON_THIS_DAY -> "回看往年今天的照片"
+        QueueType.UNPROCESSED -> "查看所有还没处理的内容"
+        QueueType.LATER -> "继续之前暂放的照片"
+        QueueType.SIMILAR -> "横向对比同组相近照片"
+        QueueType.SCREENSHOT -> "集中清理截图"
+        QueueType.LARGE_VIDEO -> "优先处理占空间的视频"
+        QueueType.RECENT_30 -> "整理最近新增内容"
+        QueueType.FAVORITE -> "回看系统或 App 收藏"
+        QueueType.MONTH -> "按月份慢慢回顾"
+    }
+
+private fun queuePriority(queue: MediaQueue): Int =
+    when (queue.type) {
+        QueueType.RANDOM -> 0
+        QueueType.ON_THIS_DAY -> 1
+        QueueType.UNPROCESSED -> 2
+        QueueType.LATER -> 3
+        QueueType.SIMILAR -> 4
+        QueueType.SCREENSHOT -> 5
+        QueueType.LARGE_VIDEO -> 6
+        QueueType.RECENT_30 -> 7
+        QueueType.FAVORITE -> 8
+        QueueType.MONTH -> 9
     }
