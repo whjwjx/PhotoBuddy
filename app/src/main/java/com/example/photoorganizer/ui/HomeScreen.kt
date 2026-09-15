@@ -330,13 +330,14 @@ private fun TrashEntry(
     bytes: Long,
     onClick: () -> Unit,
 ) {
+    val hasTrash = count > 0
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(enabled = count > 0, onClick = onClick),
+        modifier = Modifier.fillMaxWidth().clickable(enabled = hasTrash, onClick = onClick),
         shape = RoundedCornerShape(8.dp),
         colors =
             CardDefaults.cardColors(
                 containerColor =
-                    if (count > 0) {
+                    if (hasTrash) {
                         MaterialTheme.colorScheme.errorContainer
                     } else {
                         MaterialTheme.colorScheme.surfaceVariant
@@ -344,31 +345,42 @@ private fun TrashEntry(
             ),
     ) {
         Row(
-            Modifier.padding(14.dp),
+            Modifier.padding(horizontal = 12.dp, vertical = if (hasTrash) 14.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Box(
                 modifier =
                     Modifier
-                        .size(40.dp)
+                        .size(if (hasTrash) 40.dp else 32.dp)
                         .background(Color.Black.copy(alpha = 0.08f), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(Icons.Default.DeleteOutline, contentDescription = null)
             }
             Column(Modifier.weight(1f)) {
-                Text("待删除复核", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    if (count > 0) {
+                    if (hasTrash) "待删除复核" else "待删除为空",
+                    style =
+                        if (hasTrash) {
+                            MaterialTheme.typography.titleMedium
+                        } else {
+                            MaterialTheme.typography.titleSmall
+                        },
+                )
+                Text(
+                    if (hasTrash) {
                         "$count 项 · 预计释放 ${formatBytes(bytes)}"
                     } else {
                         "上滑照片后会先放到这里"
                     },
                     style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-            Text(if (count > 0) "检查" else "暂无", style = MaterialTheme.typography.labelLarge)
+            Text(if (hasTrash) "检查" else "空", style = MaterialTheme.typography.labelLarge)
         }
     }
 }
