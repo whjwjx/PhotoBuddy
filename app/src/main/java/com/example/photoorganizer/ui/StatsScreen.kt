@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.photoorganizer.data.MediaAsset
 import com.example.photoorganizer.data.local.MediaStatus
 import com.example.photoorganizer.data.local.UserActionLogEntity
 import com.example.photoorganizer.domain.LibraryStats
@@ -44,9 +45,11 @@ import com.example.photoorganizer.domain.MediaQueue
 import com.example.photoorganizer.domain.QueueType
 import com.example.photoorganizer.domain.StatsService
 import java.util.Calendar
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 private const val RECENT_QUEUE_DAYS = 30L
+private val BLOCKED_QUEUE_STATUSES = setOf(MediaStatus.TRASH.value, MediaStatus.DELETE.value)
 
 private data class QueueProgressItem(
     val queue: MediaQueue,
@@ -87,17 +90,30 @@ fun StatsScreen(
     val todayRemaining = (todayGoal - state.daily.count).coerceAtLeast(0)
     val dailyProgress = state.daily.percent(todayGoal)
     val queueProgressItems =
-        remember(state.queues, state.assets, stats.screenshotCount, stats.largeVideoCount, stats.total) {
-            listOf(
-                QueueType.RANDOM,
-                QueueType.LATER,
-                QueueType.SIMILAR,
-                QueueType.ON_THIS_DAY,
-                QueueType.SCREENSHOT,
-                QueueType.LARGE_VIDEO,
-                QueueType.RECENT_30,
-            )
-                .mapNotNull { type -> state.queues.firstOrNull { it.type == type } }
+        remember(
+            state.queues,
+            state.assets,
+            state.statuses,
+            stats.screenshotCount,
+            stats.largeVideoCount,
+            stats.total,
+        ) {
+            val fixedQueues =
+                listOf(
+                    QueueType.RANDOM,
+                    QueueType.LATER,
+                    QueueType.SIMILAR,
+                    QueueType.ON_THIS_DAY,
+                    QueueType.SCREENSHOT,
+                    QueueType.LARGE_VIDEO,
+                    QueueType.RECENT_30,
+                )
+                    .mapNotNull { type -> state.queues.firstOrNull { it.type == type } }
+            val monthQueues =
+                state.queues
+                    .filter { it.type == QueueType.MONTH && it.items.isNotEmpty() }
+                    .take(3)
+            (fixedQueues + monthQueues)
                 .map { queue ->
                     QueueProgressItem(
                         queue = queue,
@@ -405,9 +421,25 @@ private fun queueProgressTotal(
             }
         }
         QueueType.SIMILAR -> null
-        QueueType.MONTH -> queue.items.size
+        QueueType.MONTH -> monthQueueTotal(queue, state)
         QueueType.FAVORITE ->
             state.assets.count { asset ->
                 asset.isFavorite || state.statusById[asset.id] == MediaStatus.FAVORITE.value
             }
     }
+
+private fun monthQueueTotal(
+    queue: MediaQueue,
+    state: HomeUiState,
+): Int =
+    state.assets.count { asset ->
+        state.statusById[asset.id] !in BLOCKED_QUEUE_STATUSES &&
+            monthKey(asset) == queue.title
+    }.coerceAtLeast(queue.items.size)
+
+private fun monthKey(asset: MediaAsset): String {
+    val ms = asset.capturedAt
+    if (ms <= 0L) return "未知时间"
+    val c = Calendar.getInstance().apply { timeInMillis = ms }
+    return String.format(Locale.getDefault(), "%04d-%02d", c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1)
+}
