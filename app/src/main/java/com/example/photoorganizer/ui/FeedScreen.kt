@@ -213,6 +213,7 @@ fun FeedScreen(
                 total = state.queueItems.size,
                 remaining = state.remaining,
                 trashCount = state.trashCount,
+                trashBytes = state.trashBytes,
                 scopeLabel = scopeLabel,
                 onExit = requestExit,
                 onOpenTrash = onOpenTrash,
@@ -699,6 +700,7 @@ private fun TopBar(
     total: Int,
     remaining: Int,
     trashCount: Int,
+    trashBytes: Long,
     scopeLabel: String,
     onExit: () -> Unit,
     onOpenTrash: () -> Unit,
@@ -759,6 +761,7 @@ private fun TopBar(
         }
         TrashTopButton(
             count = trashCount,
+            bytes = trashBytes,
             onClick = onOpenTrash,
         )
         FeedTopIconButton(
@@ -789,6 +792,7 @@ private fun FeedTopIconButton(
 @Composable
 private fun TrashTopButton(
     count: Int,
+    bytes: Long,
     onClick: () -> Unit,
 ) {
     val highlighted = count > 0
@@ -804,22 +808,38 @@ private fun TrashTopButton(
                     },
                 )
                 .clickable(onClick = onClick)
-                .padding(horizontal = 10.dp, vertical = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(
             Icons.Default.DeleteOutline,
-            contentDescription = if (highlighted) "待删除 $count 项" else "待删除",
+            contentDescription =
+                if (highlighted) {
+                    "待删除 $count 项，预计 ${formatBytes(bytes)}"
+                } else {
+                    "待删除"
+                },
             tint = Color.White,
             modifier = Modifier.size(18.dp),
         )
-        Text(
-            count.toString(),
-            color = Color.White,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+            Text(
+                count.toString(),
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (highlighted) {
+                Text(
+                    formatBytes(bytes),
+                    color = Color.White.copy(alpha = 0.72f),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 
