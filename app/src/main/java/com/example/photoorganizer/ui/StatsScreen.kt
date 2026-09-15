@@ -84,6 +84,7 @@ fun StatsScreen(
         remember(stats.total, state.organizedCount) {
             if (stats.total == 0) 0f else (state.organizedCount.toFloat() / stats.total).coerceIn(0f, 1f)
         }
+    val organizedPercent = remember(organizedProgress) { formatPercent(organizedProgress) }
     val todayGoal = state.settings.dailyGoal.coerceAtLeast(0)
     val todayRemaining = (todayGoal - state.daily.count).coerceAtLeast(0)
     val dailyProgress = state.daily.percent(todayGoal)
@@ -157,7 +158,7 @@ fun StatsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
-                        "整体已整理 ${state.organizedCount} / ${stats.total}，还有 ${state.unprocessedCount} 张未整理。",
+                        "整理率 $organizedPercent · 已整理 ${state.organizedCount} / ${stats.total}，还有 ${state.unprocessedCount} 张未整理。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

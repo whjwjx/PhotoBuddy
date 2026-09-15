@@ -89,6 +89,7 @@ fun HomeScreen(
         remember(stats.total, state.organizedCount) {
             if (stats.total == 0) 0f else (state.organizedCount.toFloat() / stats.total).coerceIn(0f, 1f)
         }
+    val organizedPercent = remember(organizedProgress) { formatPercent(organizedProgress) }
 
     val restoreLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
@@ -142,7 +143,7 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Text(
-                            "已整理 ${state.organizedCount} / ${stats.total}",
+                            "整理率 $organizedPercent · 已整理 ${state.organizedCount} / ${stats.total}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
@@ -198,7 +199,7 @@ fun HomeScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 StatPill("总数", "${stats.total}", Modifier.weight(1f))
                 StatPill("今日", "${state.daily.count}/${state.settings.dailyGoal}", Modifier.weight(1f))
-                StatPill("已处理", "${state.organizedCount}", Modifier.weight(1f))
+                StatPill("整理率", organizedPercent, Modifier.weight(1f))
             }
 
             TrashEntry(

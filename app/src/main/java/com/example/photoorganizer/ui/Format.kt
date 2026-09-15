@@ -16,6 +16,12 @@ internal fun formatBytes(bytes: Long): String {
     }
 }
 
+internal fun formatPercent(progress: Float): String {
+    val clamped = progress.coerceIn(0f, 1f)
+    val df = DecimalFormat("#.#")
+    return "${df.format(clamped * 100)}%"
+}
+
 internal fun formatDate(ms: Long): String =
     SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(ms))
 
