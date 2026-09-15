@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.ImageSearch
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -391,6 +392,7 @@ private fun QueueGrid(
                                 QueueType.SCREENSHOT -> Icons.Default.ImageSearch
                                 QueueType.LARGE_VIDEO -> Icons.Default.Movie
                                 QueueType.RECENT_30 -> Icons.Default.Today
+                                QueueType.LATER -> Icons.Default.Schedule
                                 QueueType.FAVORITE -> Icons.Default.AutoAwesome
                                 else -> Icons.Default.PhotoLibrary
                             },
@@ -409,6 +411,7 @@ private fun buildHomeQueues(queues: List<MediaQueue>): List<MediaQueue> {
         listOf(
             QueueType.RANDOM,
             QueueType.UNPROCESSED,
+            QueueType.LATER,
             QueueType.SIMILAR,
             QueueType.SCREENSHOT,
             QueueType.LARGE_VIDEO,
@@ -498,6 +501,7 @@ private fun queueBadge(queue: MediaQueue): String =
             QueueType.SCREENSHOT -> "清理"
             QueueType.LARGE_VIDEO -> "空间"
             QueueType.RECENT_30 -> "新增"
+            QueueType.LATER -> "回看"
             QueueType.FAVORITE -> "收藏"
             QueueType.MONTH -> "回顾"
         }
@@ -514,6 +518,7 @@ private fun queueHelper(queue: MediaQueue): String =
             QueueType.SCREENSHOT -> "快速清理截图"
             QueueType.LARGE_VIDEO -> "优先查看大文件"
             QueueType.RECENT_30 -> "整理最近新增"
+            QueueType.LATER -> "继续处理稍后照片"
             QueueType.FAVORITE -> "回看系统收藏"
             QueueType.MONTH -> "按月份回看"
         }

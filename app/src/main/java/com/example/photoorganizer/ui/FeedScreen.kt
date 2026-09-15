@@ -1439,6 +1439,7 @@ private fun suggestedNextQueue(state: HomeUiState): MediaQueue? {
         listOf(
             QueueType.RANDOM,
             QueueType.UNPROCESSED,
+            QueueType.LATER,
             QueueType.SIMILAR,
             QueueType.SCREENSHOT,
             QueueType.LARGE_VIDEO,

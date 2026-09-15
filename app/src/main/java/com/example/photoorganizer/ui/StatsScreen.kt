@@ -87,6 +87,7 @@ fun StatsScreen(
         remember(state.queues, state.assets, stats.screenshotCount, stats.largeVideoCount, stats.total) {
             listOf(
                 QueueType.RANDOM,
+                QueueType.LATER,
                 QueueType.SIMILAR,
                 QueueType.SCREENSHOT,
                 QueueType.LARGE_VIDEO,
@@ -372,6 +373,7 @@ private fun queueProgressTotal(
     when (queue.type) {
         QueueType.RANDOM,
         QueueType.UNPROCESSED -> stats.total
+        QueueType.LATER -> null
         QueueType.SCREENSHOT -> stats.screenshotCount
         QueueType.LARGE_VIDEO -> stats.largeVideoCount
         QueueType.RECENT_30 -> {

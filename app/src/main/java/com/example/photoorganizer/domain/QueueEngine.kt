@@ -14,6 +14,7 @@ enum class QueueType(val label: String) {
     RECENT_30("最近 30 天"),
     MONTH("按月份"),
     UNPROCESSED("未整理"),
+    LATER("稍后"),
     FAVORITE("收藏"),
 }
 
@@ -41,9 +42,11 @@ object QueueEngine {
     fun build(
         assets: List<MediaAsset>,
         processedIds: Set<Long> = emptySet(),
+        laterIds: Set<Long> = emptySet(),
     ): List<MediaQueue> {
         val now = System.currentTimeMillis()
         val unprocessed = assets.filter { it.id !in processedIds }
+        val later = assets.filter { it.id in laterIds }
         val out = mutableListOf<MediaQueue>()
         out += queue(QueueType.RANDOM, "", unprocessed)
         out += queue(QueueType.SCREENSHOT, "", unprocessed.filter { it.isScreenshot() })
@@ -59,6 +62,7 @@ object QueueEngine {
             unprocessed.filter { it.capturedAt > 0 && it.capturedAt >= now - 30 * DAY_MS },
         )
         out += queue(QueueType.UNPROCESSED, "", unprocessed)
+        out += queue(QueueType.LATER, "", later)
         out += queue(QueueType.FAVORITE, "", unprocessed.filter { it.isFavorite })
 
         // 按月份拆分为多个队列，便于逐步整理历史相册（PRD 4.3 某个月份）
