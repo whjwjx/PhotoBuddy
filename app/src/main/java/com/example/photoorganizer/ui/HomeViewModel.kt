@@ -551,6 +551,7 @@ class HomeViewModel(
     fun createAlbum(name: String) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
+        if (albumWithName(trimmed) != null) return
         viewModelScope.launch {
             albumDao.insertAlbum(AlbumEntity(name = trimmed, createdAt = System.currentTimeMillis()))
         }
@@ -562,6 +563,7 @@ class HomeViewModel(
     ) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
+        if (albumWithName(trimmed, excludeAlbumId = albumId) != null) return
         viewModelScope.launch {
             albumDao.renameAlbum(albumId, trimmed)
         }
@@ -638,16 +640,25 @@ class HomeViewModel(
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
-            val albumId = albumDao.insertAlbum(AlbumEntity(name = trimmed, createdAt = System.currentTimeMillis()))
+            val existingAlbum = albumWithName(trimmed)
+            val albumId =
+                existingAlbum?.id
+                    ?: albumDao.insertAlbum(AlbumEntity(name = trimmed, createdAt = System.currentTimeMillis()))
+            val existed = albumDao.itemCount(albumId, asset.id) > 0
             albumDao.addItem(
                 AlbumItemEntity(albumId = albumId, mediaId = asset.id, addedAt = System.currentTimeMillis()),
             )
             finishAction(
                 asset = asset,
                 status = MediaStatus.ALBUM,
-                message = "已新建并加入「$trimmed」",
+                message =
+                    if (existingAlbum == null) {
+                        "已新建并加入「$trimmed」"
+                    } else {
+                        "已加入「$trimmed」"
+                    },
                 undoAlbumId = albumId,
-                undoAlbumItemAdded = true,
+                undoAlbumItemAdded = !existed,
             )
         }
     }
@@ -997,6 +1008,14 @@ class HomeViewModel(
         status = status.value,
         updatedAt = System.currentTimeMillis(),
     )
+
+    private fun albumWithName(
+        name: String,
+        excludeAlbumId: Long? = null,
+    ): AlbumEntity? =
+        _uiState.value.albums.firstOrNull { album ->
+            album.id != excludeAlbumId && album.name.equals(name, ignoreCase = true)
+        }
 
     private fun hasPartialMediaAccess(app: Application): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return false

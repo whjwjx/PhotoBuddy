@@ -190,6 +190,7 @@ fun AlbumsScreen() {
     renameTarget?.let { album ->
         RenameAlbumDialog(
             album = album,
+            albums = state.albums,
             onConfirm = { newName ->
                 vm.renameAlbum(album.id, newName)
                 renameTarget = null
@@ -248,6 +249,10 @@ private fun AlbumList(
     onToggleHidden: (Long, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val trimmedDraftName = draftName.trim()
+    val hasSameNameAlbum =
+        trimmedDraftName.isNotEmpty() &&
+            state.albums.any { it.name.equals(trimmedDraftName, ignoreCase = true) }
     Column(
         modifier =
             modifier
@@ -280,9 +285,16 @@ private fun AlbumList(
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
-                    Button(onClick = onCreate, enabled = draftName.trim().isNotEmpty()) {
-                        Text("新建")
+                    Button(onClick = onCreate, enabled = trimmedDraftName.isNotEmpty() && !hasSameNameAlbum) {
+                        Text(if (hasSameNameAlbum) "已存在" else "新建")
                     }
+                }
+                if (hasSameNameAlbum) {
+                    Text(
+                        "已有同名相册，可以直接打开使用。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -776,24 +788,41 @@ private fun EmptyAlbum(
 @Composable
 private fun RenameAlbumDialog(
     album: AlbumEntity,
+    albums: List<AlbumEntity>,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var name by remember(album.id) { mutableStateOf(album.name) }
+    val trimmedName = name.trim()
+    val hasSameNameAlbum =
+        trimmedName.isNotEmpty() &&
+            albums.any { it.id != album.id && it.name.equals(trimmedName, ignoreCase = true) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("重命名相册") },
         text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("相册名称") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("相册名称") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (hasSameNameAlbum) {
+                    Text(
+                        "已有同名相册，请换一个名称。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(name) }, enabled = name.trim().isNotEmpty()) {
+            Button(
+                onClick = { onConfirm(name) },
+                enabled = trimmedName.isNotEmpty() && !hasSameNameAlbum,
+            ) {
                 Text("保存")
             }
         },
