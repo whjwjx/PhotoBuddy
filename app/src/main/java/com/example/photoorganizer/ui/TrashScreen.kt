@@ -727,7 +727,7 @@ private fun TrashReviewHeader(
     onRestoreAll: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
@@ -749,91 +749,44 @@ private fun TrashReviewHeader(
                     Text(if (filtered) "恢复本来源" else "全部恢复")
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                TrashSummaryPill(
-                    label = if (filtered) "当前来源" else "全部待删",
-                    value =
-                        if (filtered) {
-                            "$visibleCount 项"
-                        } else {
-                            "$totalCount 项"
-                        },
-                    helper =
-                        if (filtered) {
-                            formatBytes(visibleBytes)
-                        } else {
-                            formatBytes(totalBytes)
-                        },
-                    modifier = Modifier.weight(1f),
-                )
-                TrashSummaryPill(
-                    label = "已选",
-                    value = "$selectedCount 项",
-                    helper =
-                        if (selectedCount > 0) {
-                            formatBytes(selectedBytes)
-                        } else {
-                            "点照片即可选择"
-                        },
-                    modifier = Modifier.weight(1f),
-                )
-                TrashSummaryPill(
-                    label = "删除方式",
-                    value =
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            "最近删除"
-                        } else {
-                            "永久删除"
-                        },
-                    helper = "系统确认后生效",
-                    modifier = Modifier.weight(1f),
-                )
-            }
             Text(
-                if (filtered) {
-                    "正在按来源筛选；切回「全部」可复核完整待删除列表。"
-                } else {
-                    "上滑加入的照片会先停在这里，适合集中恢复或确认删除。"
-                },
+                trashCompactSummary(
+                    filtered = filtered,
+                    visibleCount = visibleCount,
+                    totalCount = totalCount,
+                    visibleBytes = visibleBytes,
+                    totalBytes = totalBytes,
+                    selectedCount = selectedCount,
+                    selectedBytes = selectedBytes,
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
     }
 }
 
-@Composable
-private fun TrashSummaryPill(
-    label: String,
-    value: String,
-    helper: String,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier =
-            modifier
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f), RoundedCornerShape(8.dp))
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-        Text(
-            helper,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+private fun trashCompactSummary(
+    filtered: Boolean,
+    visibleCount: Int,
+    totalCount: Int,
+    visibleBytes: Long,
+    totalBytes: Long,
+    selectedCount: Int,
+    selectedBytes: Long,
+): String {
+    val scopeText = if (filtered) "当前来源 $visibleCount 项" else "全部待删 $totalCount 项"
+    val bytes = if (filtered) visibleBytes else totalBytes
+    val deleteMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) "最近删除" else "永久删除"
+    val selectedText =
+        if (selectedCount > 0) {
+            "已选 $selectedCount 项 ${formatBytes(selectedBytes)}"
+        } else {
+            "点照片选择"
+        }
+    return "$scopeText · 待释放 ${formatBytes(bytes)} · $selectedText · $deleteMode"
 }
 
 @Composable
