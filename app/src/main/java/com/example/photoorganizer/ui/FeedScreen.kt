@@ -643,15 +643,15 @@ private fun SimilarComparisonStrip(
     Column(
         Modifier
             .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.58f), RoundedCornerShape(8.dp))
+            .background(Color.Black.copy(alpha = 0.52f), RoundedCornerShape(8.dp))
             .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)), RoundedCornerShape(8.dp))
-            .padding(horizontal = 10.dp, vertical = 9.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    "相似照片比较",
+                    "对比相似照片",
                     color = Color.White,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
@@ -687,7 +687,7 @@ private fun SimilarComparisonStrip(
         current?.let { asset ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 SimilarInfoPill(
-                    label = "分辨率",
+                    label = "尺寸",
                     value = similarResolutionText(asset),
                     modifier = Modifier.weight(1f),
                 )
@@ -713,13 +713,13 @@ private fun SimilarComparisonStrip(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             SimilarGroupAction(
                 label = "整组稍后",
-                helper = "保留本组待复看",
+                helper = "不处理，稍后再看",
                 modifier = Modifier.weight(1f),
                 onClick = onLaterAll,
             )
             SimilarGroupAction(
-                label = "保留当前",
-                helper = "其余 ${candidates.size - 1} 张进待删",
+                label = "保留此张",
+                helper = "其余进待删复核",
                 modifier = Modifier.weight(1f),
                 onClick = onKeepCurrent,
             )
@@ -738,7 +738,7 @@ private fun SimilarCandidateTile(
     Column(
         modifier =
             Modifier
-                .width(76.dp)
+                .width(82.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color.White.copy(alpha = if (selected) 0.22f else 0.11f))
                 .border(
@@ -748,9 +748,9 @@ private fun SimilarCandidateTile(
                 )
                 .clickable(onClick = onPick)
                 .padding(3.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        Box(Modifier.fillMaxWidth().height(58.dp)) {
+        Box(Modifier.fillMaxWidth().height(64.dp)) {
             AsyncImage(
                 model = item.uri,
                 contentDescription = item.displayName,
@@ -791,7 +791,7 @@ private fun SimilarInfoPill(
         modifier =
             modifier
                 .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 8.dp, vertical = 5.dp),
         verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
         Text(
@@ -825,7 +825,7 @@ private fun SimilarGroupAction(
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color.White.copy(alpha = 0.13f))
                 .clickable(onClick = onClick)
-                .padding(horizontal = 10.dp, vertical = 7.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
         Text(
