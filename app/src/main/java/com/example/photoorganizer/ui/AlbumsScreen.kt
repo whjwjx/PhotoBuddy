@@ -251,6 +251,26 @@ private fun AlbumList(
     val hasSameNameAlbum =
         trimmedDraftName.isNotEmpty() &&
             state.albums.any { it.name.equals(trimmedDraftName, ignoreCase = true) }
+    val sortedAlbums =
+        remember(
+            state.albums,
+            state.albumCounts,
+            state.albumLastAddedAt,
+            state.pinnedAlbumIds,
+            state.hiddenAlbumIds,
+        ) {
+            sortAlbumsForManagement(
+                albums = state.albums,
+                counts = state.albumCounts,
+                lastAddedAt = state.albumLastAddedAt,
+                pinnedAlbumIds = state.pinnedAlbumIds,
+                hiddenAlbumIds = state.hiddenAlbumIds,
+            )
+        }
+    val visibleAlbums =
+        sortedAlbums.filter { album ->
+            query.isBlank() || album.name.contains(query.trim(), ignoreCase = true)
+        }
     Column(
         modifier =
             modifier
@@ -258,37 +278,6 @@ private fun AlbumList(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("新建相册", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = draftName,
-                        onValueChange = onDraftChange,
-                        label = { Text("相册名称") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Button(onClick = onCreate, enabled = trimmedDraftName.isNotEmpty() && !hasSameNameAlbum) {
-                        Text(if (hasSameNameAlbum) "已存在" else "创建")
-                    }
-                }
-                if (hasSameNameAlbum) {
-                    Text(
-                        "已有同名相册，可以直接打开使用。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (state.albums.isEmpty() && trimmedDraftName.isEmpty()) {
-                    StarterAlbumSuggestions(onCreateName = onCreateName)
-                }
-            }
-        }
-
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
@@ -298,52 +287,88 @@ private fun AlbumList(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        val sortedAlbums =
-            remember(
-                state.albums,
-                state.albumCounts,
-                state.albumLastAddedAt,
-                state.pinnedAlbumIds,
-                state.hiddenAlbumIds,
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            if (state.albums.isEmpty()) {
+                EmptyAlbums()
+            } else if (visibleAlbums.isEmpty()) {
+                EmptyAlbumSearch(query = query)
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(visibleAlbums, key = { it.id }) { album ->
+                        val cover = state.albumMediaIds[album.id]?.firstNotNullOfOrNull { id ->
+                            state.allAssets.firstOrNull { it.id == id }
+                        }
+                        AlbumRow(
+                            album = album,
+                            cover = cover,
+                            count = state.albumCounts[album.id] ?: 0,
+                            lastAddedAt = state.albumLastAddedAt[album.id] ?: 0L,
+                            pinned = album.id in state.pinnedAlbumIds,
+                            hidden = album.id in state.hiddenAlbumIds,
+                            onOpen = { onOpen(album.id) },
+                            onRename = { onRename(album) },
+                            onDelete = { onDelete(album) },
+                            onMerge = { onMerge(album) },
+                            onTogglePin = { onTogglePin(album.id, album.id !in state.pinnedAlbumIds) },
+                            onToggleHidden = { onToggleHidden(album.id, album.id !in state.hiddenAlbumIds) },
+                        )
+                    }
+                }
+            }
+        }
+
+        CreateAlbumCard(
+            draftName = draftName,
+            trimmedDraftName = trimmedDraftName,
+            hasSameNameAlbum = hasSameNameAlbum,
+            showStarterAlbums = state.albums.isEmpty() && trimmedDraftName.isEmpty(),
+            onDraftChange = onDraftChange,
+            onCreate = onCreate,
+            onCreateName = onCreateName,
+        )
+    }
+}
+
+@Composable
+private fun CreateAlbumCard(
+    draftName: String,
+    trimmedDraftName: String,
+    hasSameNameAlbum: Boolean,
+    showStarterAlbums: Boolean,
+    onDraftChange: (String) -> Unit,
+    onCreate: () -> Unit,
+    onCreateName: (String) -> Unit,
+) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("新建相册", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                sortAlbumsForManagement(
-                    albums = state.albums,
-                    counts = state.albumCounts,
-                    lastAddedAt = state.albumLastAddedAt,
-                    pinnedAlbumIds = state.pinnedAlbumIds,
-                    hiddenAlbumIds = state.hiddenAlbumIds,
+                OutlinedTextField(
+                    value = draftName,
+                    onValueChange = onDraftChange,
+                    label = { Text("相册名称") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                Button(onClick = onCreate, enabled = trimmedDraftName.isNotEmpty() && !hasSameNameAlbum) {
+                    Text(if (hasSameNameAlbum) "已存在" else "创建")
+                }
+            }
+            if (hasSameNameAlbum) {
+                Text(
+                    "已有同名相册，可以直接打开使用。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        val visibleAlbums =
-            sortedAlbums.filter { album ->
-                query.isBlank() || album.name.contains(query.trim(), ignoreCase = true)
-            }
-
-        if (state.albums.isEmpty()) {
-            EmptyAlbums()
-        } else if (visibleAlbums.isEmpty()) {
-            EmptyAlbumSearch(query = query)
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(visibleAlbums, key = { it.id }) { album ->
-                    val cover = state.albumMediaIds[album.id]?.firstNotNullOfOrNull { id ->
-                        state.allAssets.firstOrNull { it.id == id }
-                    }
-                    AlbumRow(
-                        album = album,
-                        cover = cover,
-                        count = state.albumCounts[album.id] ?: 0,
-                        lastAddedAt = state.albumLastAddedAt[album.id] ?: 0L,
-                        pinned = album.id in state.pinnedAlbumIds,
-                        hidden = album.id in state.hiddenAlbumIds,
-                        onOpen = { onOpen(album.id) },
-                        onRename = { onRename(album) },
-                        onDelete = { onDelete(album) },
-                        onMerge = { onMerge(album) },
-                        onTogglePin = { onTogglePin(album.id, album.id !in state.pinnedAlbumIds) },
-                        onToggleHidden = { onToggleHidden(album.id, album.id !in state.hiddenAlbumIds) },
-                    )
-                }
+            if (showStarterAlbums) {
+                StarterAlbumSuggestions(onCreateName = onCreateName)
             }
         }
     }
