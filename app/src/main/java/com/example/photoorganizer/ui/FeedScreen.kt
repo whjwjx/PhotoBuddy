@@ -994,7 +994,7 @@ private fun AlbumQuickBar(
             }
             item {
                 AlbumChip(
-                    text = if (state.albums.isEmpty()) "新建相册" else "更多相册",
+                    text = if (state.albums.isEmpty()) "新建标签" else "更多标签",
                     onClick = onMore,
                 )
             }
@@ -1101,13 +1101,13 @@ private fun AlbumActionSheet(
             OutlinedTextField(
                 value = draftName,
                 onValueChange = { draftName = it },
-                label = { Text("相册名称") },
+                label = { Text("标签名称") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             if (hasSameNameAlbum) {
                 Text(
-                    "已有同名相册，请换一个名称。",
+                    "已有同名标签，请换一个名称。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -1132,7 +1132,7 @@ private fun AlbumActionSheet(
                 onClick = { showMapping = true },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("映射说明")
+                Text("同步说明")
             }
             TextButton(
                 onClick = {
@@ -1154,7 +1154,7 @@ private fun AlbumActionSheet(
     if (showMapping) {
         AlertDialog(
             onDismissRequest = { showMapping = false },
-            title = { Text("相册映射说明") },
+            title = { Text("相册同步说明") },
             text = {
                 Text(
                     "「${album.name}」目前是 App 内标签。加入、移出或删除这个相册，只会改变本 App 的归类记录，" +
@@ -1218,7 +1218,7 @@ private fun AlbumPickerSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("加入相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("加入 App 标签", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
                     "App 内标签，不移动系统文件",
                     style = MaterialTheme.typography.bodySmall,
@@ -1228,7 +1228,7 @@ private fun AlbumPickerSheet(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                label = { Text("搜索或新建相册") },
+                label = { Text("搜索或新建标签") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -1241,19 +1241,19 @@ private fun AlbumPickerSheet(
                 }
             } else if (trimmedQuery.isNotEmpty()) {
                 Text(
-                    "已有同名相册，点下方结果加入。",
+                    "已有同名标签，点下方结果加入。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
                 Text(
-                    "输入名称可直接创建，点相册会立即归类当前照片。",
+                    "输入名称可直接创建，点标签会立即归类当前照片。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             if (trimmedQuery.isBlank() && pinnedAlbums.isNotEmpty()) {
-                AlbumSheetSectionTitle("置顶相册", pinnedAlbums.size)
+                AlbumSheetSectionTitle("置顶标签", pinnedAlbums.size)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(pinnedAlbums, key = { it.id }) { album ->
                         AlbumSheetChip(
@@ -1279,15 +1279,15 @@ private fun AlbumPickerSheet(
                 }
             }
             AlbumSheetSectionTitle(
-                title = if (trimmedQuery.isBlank()) "全部相册" else "搜索结果",
+                title = if (trimmedQuery.isBlank()) "全部标签" else "搜索结果",
                 count = filtered.size,
             )
             if (filtered.isEmpty()) {
                 Text(
                     if (albums.isEmpty()) {
-                        "还没有相册，可以先新建一个。"
+                        "还没有标签，可以先新建一个。"
                     } else {
-                        "没有匹配的相册。"
+                        "没有匹配的标签。"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                 )

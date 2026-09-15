@@ -295,7 +295,7 @@ private fun AlbumList(
                 }
                 if (hasSameNameAlbum) {
                     Text(
-                        "已有同名相册，可以直接打开使用。",
+                        "已有同名标签，可以直接打开使用。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -756,7 +756,7 @@ private fun EmptyAlbumSearch(query: String) {
         Text("没有找到「$query」", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
-            "可以换个关键词，或者用上方输入框新建相册。",
+            "可以换个关键词，或者用上方输入框新建标签。",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
         )
@@ -770,10 +770,10 @@ private fun EmptyAlbums() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("还没有相册", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text("还没有标签", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
-            "在整理页加入相册，或者先创建一个常用分类。",
+            "在整理页加入标签，或者先创建一个常用分类。",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
         )
@@ -809,7 +809,7 @@ private fun EmptyAlbum(
         Text("「$albumName」暂无内容", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
-            "去整理页把照片加入这个相册。",
+            "去整理页把照片加入这个标签。",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
         )
@@ -830,19 +830,19 @@ private fun RenameAlbumDialog(
             albums.any { it.id != album.id && it.name.equals(trimmedName, ignoreCase = true) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("重命名相册") },
+        title = { Text("重命名标签") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("相册名称") },
+                    label = { Text("标签名称") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (hasSameNameAlbum) {
                     Text(
-                        "已有同名相册，请换一个名称。",
+                        "已有同名标签，请换一个名称。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
