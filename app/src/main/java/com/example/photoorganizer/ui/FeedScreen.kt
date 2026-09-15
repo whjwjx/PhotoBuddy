@@ -268,16 +268,16 @@ fun FeedScreen(
                     onUndo = undoLastAction,
                 )
                 AssetCaption(asset = asset)
-                if (state.feedActionBarExpanded) {
-                    ActionBar(
-                        similarMode = showSimilarComparison,
-                        isAppFavorite = isAppFavorite,
-                        onTrash = { vm.act(MediaStatus.TRASH) },
-                        onKeep = { vm.act(MediaStatus.KEEP) },
-                        onLater = { vm.act(MediaStatus.LATER) },
-                        onFavorite = { vm.toggleFavorite() },
-                    )
-                }
+                ActionPanel(
+                    expanded = state.feedActionBarExpanded,
+                    similarMode = showSimilarComparison,
+                    isAppFavorite = isAppFavorite,
+                    onToggle = { vm.setFeedActionBarExpanded(!state.feedActionBarExpanded) },
+                    onTrash = { vm.act(MediaStatus.TRASH) },
+                    onKeep = { vm.act(MediaStatus.KEEP) },
+                    onLater = { vm.act(MediaStatus.LATER) },
+                    onFavorite = { vm.toggleFavorite() },
+                )
                 AlbumQuickBar(
                     state = state,
                     onPick = { vm.addCurrentToAlbum(it) },
@@ -287,19 +287,6 @@ fun FeedScreen(
                 )
             }
 
-            ActionPanelToggle(
-                expanded = state.feedActionBarExpanded,
-                onClick = { vm.setFeedActionBarExpanded(!state.feedActionBarExpanded) },
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .navigationBarsPadding()
-                        .padding(
-                            end = 18.dp,
-                            bottom = if (state.feedActionBarExpanded) 320.dp else 252.dp,
-                        )
-                        .zIndex(5f),
-            )
             DragActionHint(
                 dragX = dragX,
                 dragY = dragY,
@@ -1280,59 +1267,74 @@ private fun AssetCaption(asset: MediaAsset) {
 }
 
 @Composable
-private fun ActionBar(
+private fun ActionPanel(
+    expanded: Boolean,
     similarMode: Boolean,
     isAppFavorite: Boolean,
+    onToggle: () -> Unit,
     onTrash: () -> Unit,
     onKeep: () -> Unit,
     onLater: () -> Unit,
     onFavorite: () -> Unit,
 ) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.48f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 6.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceAround,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        FeedAction(
-            icon = Icons.Default.DeleteOutline,
-            label = if (similarMode) "删这张" else "待删除",
-            helper = if (similarMode) "删这张" else "待删除",
-            accent = Color(0xFFFF453A),
-            modifier = Modifier.weight(1f),
-            onClick = onTrash,
-        )
-        FeedAction(
-            icon = Icons.Default.Schedule,
-            label = if (similarMode) "当前稍后" else "稍后",
-            helper = if (similarMode) "当前稍后" else "稍后",
-            accent = Color(0xFF8E8E93),
-            modifier = Modifier.weight(1f),
-            onClick = onLater,
-        )
-        FeedAction(
-            icon = Icons.Default.Check,
-            label = if (similarMode) "保留这张" else "保留",
-            helper = if (similarMode) "保留这张" else "保留",
-            accent = Color(0xFF34C759),
-            modifier = Modifier.weight(1f),
-            onClick = onKeep,
-        )
-        FeedAction(
-            icon = Icons.Default.Star,
-            label = if (isAppFavorite) "取消收藏" else "收藏",
-            helper = if (isAppFavorite) "取消收藏" else "收藏",
-            accent = if (isAppFavorite) Color(0xFF8E8E93) else Color(0xFFFFCC00),
-            modifier = Modifier.weight(1f),
-            onClick = onFavorite,
-        )
+    if (expanded) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(Color.Black.copy(alpha = 0.48f), RoundedCornerShape(8.dp))
+                .padding(start = 6.dp, top = 6.dp, end = 4.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FeedAction(
+                icon = Icons.Default.DeleteOutline,
+                label = if (similarMode) "删这张" else "待删除",
+                helper = if (similarMode) "删这张" else "待删除",
+                accent = Color(0xFFFF453A),
+                modifier = Modifier.weight(1f),
+                onClick = onTrash,
+            )
+            FeedAction(
+                icon = Icons.Default.Schedule,
+                label = if (similarMode) "当前稍后" else "稍后",
+                helper = if (similarMode) "当前稍后" else "稍后",
+                accent = Color(0xFF8E8E93),
+                modifier = Modifier.weight(1f),
+                onClick = onLater,
+            )
+            FeedAction(
+                icon = Icons.Default.Check,
+                label = if (similarMode) "保留这张" else "保留",
+                helper = if (similarMode) "保留这张" else "保留",
+                accent = Color(0xFF34C759),
+                modifier = Modifier.weight(1f),
+                onClick = onKeep,
+            )
+            FeedAction(
+                icon = Icons.Default.Star,
+                label = if (isAppFavorite) "取消收藏" else "收藏",
+                helper = if (isAppFavorite) "取消收藏" else "收藏",
+                accent = if (isAppFavorite) Color(0xFF8E8E93) else Color(0xFFFFCC00),
+                modifier = Modifier.weight(1f),
+                onClick = onFavorite,
+            )
+            ActionPanelEdgeToggle(expanded = true, onClick = onToggle)
+        }
+    } else {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(38.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ActionPanelEdgeToggle(expanded = false, onClick = onToggle)
+        }
     }
 }
 
 @Composable
-private fun ActionPanelToggle(
+private fun ActionPanelEdgeToggle(
     expanded: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1340,18 +1342,25 @@ private fun ActionPanelToggle(
     Box(
         modifier =
             modifier
-                .size(44.dp)
-                .clip(CircleShape)
+                .width(34.dp)
+                .height(54.dp)
+                .clip(RoundedCornerShape(topStart = 22.dp, bottomStart = 22.dp))
                 .background(Color.White.copy(alpha = if (expanded) 0.22f else 0.14f))
-                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)), CircleShape)
+                .border(
+                    BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                    RoundedCornerShape(topStart = 22.dp, bottomStart = 22.dp),
+                )
                 .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            if (expanded) Icons.Default.Close else Icons.Default.MoreHoriz,
+            Icons.Default.PlayArrow,
             contentDescription = if (expanded) "收起操作" else "展开操作",
             tint = Color.White.copy(alpha = 0.92f),
-            modifier = Modifier.size(20.dp),
+            modifier =
+                Modifier
+                    .size(18.dp)
+                    .graphicsLayer(rotationZ = if (expanded) 0f else 180f),
         )
     }
 }
