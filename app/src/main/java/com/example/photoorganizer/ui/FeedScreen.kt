@@ -192,6 +192,7 @@ fun FeedScreen(
                         assets = state.allAssets,
                     )
                 }
+            val isAppFavorite = state.statusById[asset.id] == MediaStatus.FAVORITE.value
             FeedPage(
                 asset = asset,
                 dragX = dragX,
@@ -200,7 +201,7 @@ fun FeedScreen(
                 onKeep = { vm.act(MediaStatus.KEEP) },
                 onLater = { vm.act(MediaStatus.LATER) },
                 onTrash = { vm.act(MediaStatus.TRASH) },
-                onFavorite = { vm.act(MediaStatus.FAVORITE) },
+                onFavorite = { vm.toggleFavorite() },
                 onPreviousSimilar = { previousSimilarIndex?.let { vm.setIndex(it) } },
                 onNextSimilar = { nextSimilarIndex?.let { vm.setIndex(it) } },
                 onDragFeedback = { x, y ->
@@ -235,12 +236,14 @@ fun FeedScreen(
                     abs(dragX) <= SWIPE_HINT_THRESHOLD &&
                         abs(dragY) <= SWIPE_HINT_THRESHOLD,
                 similarMode = showSimilarComparison,
+                isAppFavorite = isAppFavorite,
                 modifier = Modifier.align(Alignment.Center),
             )
             SwipeFeedback(
                 dragX = dragX,
                 dragY = dragY,
                 similarMode = showSimilarComparison,
+                isAppFavorite = isAppFavorite,
                 modifier = Modifier.align(Alignment.Center),
             )
 
@@ -265,10 +268,11 @@ fun FeedScreen(
                 AssetCaption(asset = asset)
                 ActionBar(
                     similarMode = showSimilarComparison,
+                    isAppFavorite = isAppFavorite,
                     onTrash = { vm.act(MediaStatus.TRASH) },
                     onKeep = { vm.act(MediaStatus.KEEP) },
                     onLater = { vm.act(MediaStatus.LATER) },
-                    onFavorite = { vm.act(MediaStatus.FAVORITE) },
+                    onFavorite = { vm.toggleFavorite() },
                 )
                 AlbumQuickBar(
                     state = state,
@@ -782,6 +786,7 @@ private fun SwipeFeedback(
     dragX: Float,
     dragY: Float,
     similarMode: Boolean,
+    isAppFavorite: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val horizontal = abs(dragX) > abs(dragY)
@@ -796,6 +801,7 @@ private fun SwipeFeedback(
             horizontal && dragX > 0 -> "保留"
             horizontal -> "稍后"
             dragY < 0 -> "加入待删除"
+            isAppFavorite -> "取消收藏"
             else -> "收藏"
         }
     val helper = if (armed) {
@@ -806,6 +812,7 @@ private fun SwipeFeedback(
     val color =
         when (label) {
             "加入待删除" -> Color(0xFFE53935)
+            "取消收藏" -> Color(0xFF8E8E93)
             "收藏" -> Color(0xFFFFC107)
             "保留" -> Color(0xFF43A047)
             "上一张", "下一张" -> Color(0xFF0A84FF)
@@ -1050,6 +1057,8 @@ private fun undoVisual(message: String): UndoVisual =
             UndoVisual(Color(0xFFFF453A), "进入复核页前不会删除")
         message.contains("稍后") ->
             UndoVisual(Color(0xFF8E8E93), "已移出当前短队列")
+        message.contains("取消收藏") ->
+            UndoVisual(Color(0xFF8E8E93), "已保留但不再收藏")
         message.contains("收藏") ->
             UndoVisual(Color(0xFFFFCC00), "已从未整理中移出")
         message.contains("已撤销") ->
@@ -1064,6 +1073,7 @@ private fun undoVisual(message: String): UndoVisual =
 private fun GestureHints(
     visible: Boolean,
     similarMode: Boolean,
+    isAppFavorite: Boolean,
     modifier: Modifier = Modifier,
 ) {
     if (!visible) return
@@ -1072,7 +1082,11 @@ private fun GestureHints(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(120.dp),
     ) {
-        Text("下滑收藏", color = Color.White.copy(alpha = 0.45f), style = MaterialTheme.typography.labelMedium)
+        Text(
+            if (isAppFavorite) "下滑取消收藏" else "下滑收藏",
+            color = Color.White.copy(alpha = 0.45f),
+            style = MaterialTheme.typography.labelMedium,
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(96.dp)) {
             Text(
                 if (similarMode) "上一张" else "稍后",
@@ -1115,6 +1129,7 @@ private fun AssetCaption(asset: MediaAsset) {
 @Composable
 private fun ActionBar(
     similarMode: Boolean,
+    isAppFavorite: Boolean,
     onTrash: () -> Unit,
     onKeep: () -> Unit,
     onLater: () -> Unit,
@@ -1154,9 +1169,9 @@ private fun ActionBar(
         )
         FeedAction(
             icon = Icons.Default.Star,
-            label = "收藏",
+            label = if (isAppFavorite) "取消收藏" else "收藏",
             helper = "下滑",
-            accent = Color(0xFFFFCC00),
+            accent = if (isAppFavorite) Color(0xFF8E8E93) else Color(0xFFFFCC00),
             modifier = Modifier.weight(1f),
             onClick = onFavorite,
         )

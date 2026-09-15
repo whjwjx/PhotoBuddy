@@ -347,6 +347,16 @@ class HomeViewModel(
         viewModelScope.launch { finishAction(asset, nextStatus, actionMessage(nextStatus)) }
     }
 
+    /** 下拉收藏支持二次触发取消 App 内收藏，贴近 Slidebox 的轻量切换手感。 */
+    fun toggleFavorite() {
+        val state = _uiState.value
+        val asset = state.current ?: return
+        val isAppFavorite = state.statusById[asset.id] == MediaStatus.FAVORITE.value
+        val nextStatus = if (isAppFavorite) MediaStatus.KEEP else MediaStatus.FAVORITE
+        val message = if (isAppFavorite) "已取消收藏" else actionMessage(MediaStatus.FAVORITE)
+        viewModelScope.launch { finishAction(asset, nextStatus, message) }
+    }
+
     /**
      * 兼容旧入口：主整理流里的删除只标记为待删除，不直接请求系统删除。
      */
