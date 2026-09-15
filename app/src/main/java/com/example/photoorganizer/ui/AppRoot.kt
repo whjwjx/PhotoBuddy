@@ -251,6 +251,11 @@ private fun PermissionScreen(onRequest: () -> Unit) {
             )
             PermissionTip(
                 icon = Icons.Default.Security,
+                title = "删除风险会提前说明",
+                body = "系统支持最近删除时会先进回收站；不支持时，复核页会明确提示永久删除风险。",
+            )
+            PermissionTip(
+                icon = Icons.Default.Security,
                 title = "相册先用 App 内标签",
                 body = "加入相册不会移动系统文件，后续需要同步系统相册时再单独开启。",
             )
