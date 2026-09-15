@@ -76,6 +76,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -135,12 +136,16 @@ fun FeedScreen(
                 onQueue = { showQueue = true },
             )
             UndoBanner(
-                visible = state.undo != null,
-                message = state.undo?.message.orEmpty(),
-                onUndo = { vm.undoLast() },
+                visible = state.feedbackMessage != null,
+                message = state.feedbackMessage.orEmpty(),
+                onUndo = {
+                    vm.clearFeedback()
+                    vm.undoLast()
+                },
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
+                        .zIndex(8f)
                         .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 24.dp),
             )
@@ -231,14 +236,19 @@ fun FeedScreen(
             }
 
             UndoBanner(
-                visible = state.undo != null,
-                message = state.undo?.message.orEmpty(),
-                onUndo = { vm.undoLast() },
+                visible = state.feedbackMessage != null,
+                message = state.feedbackMessage.orEmpty(),
+                onUndo = {
+                    vm.clearFeedback()
+                    vm.undoLast()
+                },
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
+                        .zIndex(8f)
                         .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 238.dp),
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 314.dp),
             )
         }
     }

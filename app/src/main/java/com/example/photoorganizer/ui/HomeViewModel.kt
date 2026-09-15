@@ -92,6 +92,7 @@ data class HomeUiState(
     val pendingRestore: IntentSender? = null,
     val restoringLogId: Long? = null,
     val undo: UndoState? = null,
+    val feedbackMessage: String? = null,
 ) {
     val current: MediaAsset? get() = queueItems.getOrNull(currentIndex)
     val remaining: Int get() = (queueItems.size - currentIndex).coerceAtLeast(0)
@@ -392,7 +393,7 @@ class HomeViewModel(
                 }
             }
             settingsRepo.addProcessed(-ids.size)
-            _uiState.update { s -> recompute(s.copy(undo = null)) }
+            _uiState.update { s -> recompute(s.copy(undo = null, feedbackMessage = null)) }
         }
     }
 
@@ -400,17 +401,21 @@ class HomeViewModel(
         val undo = _uiState.value.undo ?: return
         val asset = _uiState.value.allAssets.firstOrNull { it.id == undo.mediaId } ?: return
         viewModelScope.launch {
-            if (undo.beforeStatus.isNullOrEmpty()) {
+            val restoredStatus =
+                undo.beforeStatus
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let {
+                        MediaStatusEntity(
+                            localAssetId = undo.mediaId,
+                            mediaType = undo.mediaType,
+                            status = it,
+                            updatedAt = System.currentTimeMillis(),
+                        )
+                    }
+            if (restoredStatus == null) {
                 dao.deleteByIds(listOf(undo.mediaId))
             } else {
-                dao.upsert(
-                    MediaStatusEntity(
-                        localAssetId = undo.mediaId,
-                        mediaType = undo.mediaType,
-                        status = undo.beforeStatus,
-                        updatedAt = System.currentTimeMillis(),
-                    ),
-                )
+                dao.upsert(restoredStatus)
             }
             logDao.insert(
                 UserActionLogEntity(
@@ -420,12 +425,34 @@ class HomeViewModel(
                     action = "undo",
                     source = _uiState.value.queueSource,
                     beforeState = _uiState.value.statusById[asset.id].orEmpty(),
-                    afterState = undo.beforeStatus.orEmpty(),
+                    afterState = restoredStatus?.status.orEmpty(),
                     createdAt = System.currentTimeMillis(),
                 ),
             )
             settingsRepo.addProcessed(-1)
-            _uiState.update { s -> recompute(s.copy(undo = null)) }
+            _uiState.update { s ->
+                val statuses =
+                    if (restoredStatus == null) {
+                        s.statuses.filterNot { it.localAssetId == undo.mediaId }
+                    } else {
+                        s.statuses.filterNot { it.localAssetId == undo.mediaId } + restoredStatus
+                    }
+                val updated =
+                    recompute(
+                        s.copy(
+                            statuses = statuses,
+                            processedCount = (s.processedCount - 1).coerceAtLeast(0),
+                            undo = null,
+                            feedbackMessage = null,
+                        ),
+                    )
+                val restoredIndex = updated.queueItems.indexOfFirst { it.id == undo.mediaId }
+                if (restoredIndex >= 0) {
+                    updated.copy(currentIndex = restoredIndex)
+                } else {
+                    updated
+                }
+            }
         }
     }
 
@@ -656,6 +683,7 @@ class HomeViewModel(
                         pendingRestore = null,
                         restoringLogId = null,
                         undo = null,
+                        feedbackMessage = null,
                         error = null,
                     ),
                 )
@@ -721,7 +749,28 @@ class HomeViewModel(
         val now = System.currentTimeMillis()
         val before = dao.get(asset.id)?.status.orEmpty()
         val source = _uiState.value.queueSource
+        val undo =
+            UndoState(
+                mediaId = asset.id,
+                mediaName = asset.displayName,
+                mediaType = asset.mediaType.name,
+                beforeStatus = before.ifEmpty { null },
+                message = message,
+                createdAt = now,
+            )
+        _uiState.update { it.copy(undo = undo, feedbackMessage = message) }
         dao.upsert(toEntity(asset, status))
+        _uiState.update { s ->
+            recompute(
+                s.copy(
+                    currentIndex = s.currentIndex.coerceAtMost(s.queueItems.size),
+                    processedCount = s.processedCount + 1,
+                    undo = undo,
+                    feedbackMessage = message,
+                ),
+            )
+        }
+        clearFeedbackAfterDelay(undo)
         logDao.insert(
             UserActionLogEntity(
                 mediaId = asset.id,
@@ -735,34 +784,19 @@ class HomeViewModel(
                 createdAt = now,
             ),
         )
-        val undo =
-            UndoState(
-                mediaId = asset.id,
-                mediaName = asset.displayName,
-                mediaType = asset.mediaType.name,
-                beforeStatus = before.ifEmpty { null },
-                message = message,
-                createdAt = now,
-            )
-        _uiState.update { s ->
-            recompute(
-                s.copy(
-                    currentIndex = s.currentIndex.coerceAtMost(s.queueItems.size),
-                    processedCount = s.processedCount + 1,
-                    undo = undo,
-                ),
-            )
-        }
-        clearUndoAfterDelay(undo)
         settingsRepo.addProcessed(1)
     }
 
-    private fun clearUndoAfterDelay(undo: UndoState) {
+    fun clearFeedback() {
+        _uiState.update { it.copy(feedbackMessage = null) }
+    }
+
+    private fun clearFeedbackAfterDelay(undo: UndoState) {
         viewModelScope.launch {
             delay(UNDO_VISIBLE_MS)
             _uiState.update { state ->
                 if (state.undo?.mediaId == undo.mediaId && state.undo?.createdAt == undo.createdAt) {
-                    state.copy(undo = null)
+                    state.copy(undo = null, feedbackMessage = null)
                 } else {
                     state
                 }
