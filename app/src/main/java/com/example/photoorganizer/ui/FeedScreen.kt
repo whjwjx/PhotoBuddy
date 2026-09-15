@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -88,6 +89,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
 import com.example.photoorganizer.data.MediaAsset
 import com.example.photoorganizer.data.MediaType
 import com.example.photoorganizer.data.local.AlbumEntity
@@ -500,11 +503,75 @@ private fun FeedPage(
         if (asset.mediaType == MediaType.VIDEO) {
             VideoPage(uri = asset.uri, active = true, modifier = mediaModifier)
         } else {
-            AsyncImage(
+            SubcomposeAsyncImage(
                 model = asset.uri,
                 contentDescription = asset.displayName,
                 modifier = mediaModifier,
                 contentScale = ContentScale.Fit,
+                loading = {
+                    MediaLoadingState()
+                },
+                error = {
+                    MediaLoadError(asset)
+                },
+                success = {
+                    SubcomposeAsyncImageContent()
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun MediaLoadingState() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            CircularProgressIndicator(color = Color.White.copy(alpha = 0.82f))
+            Text(
+                "正在加载照片",
+                color = Color.White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MediaLoadError(asset: MediaAsset) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .padding(horizontal = 28.dp)
+                    .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                    .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                "照片加载失败",
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                asset.displayName,
+                color = Color.White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                "可以先标记稍后，或继续处理下一张。",
+                color = Color.White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
             )
         }
     }
