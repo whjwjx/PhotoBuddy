@@ -22,7 +22,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -124,7 +123,7 @@ fun StatsScreen(
         }
     val recommendedQueue = queueProgressItems.firstOrNull { it.queue.items.isNotEmpty() }?.queue
 
-    Scaffold(topBar = { TopAppBar(title = { Text("统计") }) }) { padding ->
+    Scaffold(topBar = { CompactTopAppBar(title = { Text("统计") }) }) { padding ->
         Column(
             modifier =
                 Modifier

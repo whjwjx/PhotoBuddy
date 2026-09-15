@@ -39,7 +39,6 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -204,7 +203,7 @@ private fun hasMediaAccess(context: android.content.Context): Boolean =
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PermissionScreen(onRequest: () -> Unit) {
-    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) }) { padding ->
+    Scaffold(topBar = { CompactTopAppBar(title = { Text(stringResource(R.string.app_name)) }) }) { padding ->
         Column(
             Modifier
                 .fillMaxSize()
