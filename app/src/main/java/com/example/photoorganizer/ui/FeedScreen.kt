@@ -173,6 +173,14 @@ fun FeedScreen(
             val selectedSimilarPosition = similarCandidates.indexOfFirst { it.index == state.currentIndex }
             val previousSimilarIndex = similarCandidates.getOrNull(selectedSimilarPosition - 1)?.index
             val nextSimilarIndex = similarCandidates.getOrNull(selectedSimilarPosition + 1)?.index
+            val scopeLabel =
+                remember(state.filterType, state.filterBucket, state.allAssets) {
+                    feedScopeLabel(
+                        filterType = state.filterType,
+                        filterBucket = state.filterBucket,
+                        assets = state.allAssets,
+                    )
+                }
             FeedPage(
                 asset = asset,
                 dragX = dragX,
@@ -202,6 +210,7 @@ fun FeedScreen(
                 total = state.queueItems.size,
                 remaining = state.remaining,
                 trashCount = state.trashCount,
+                scopeLabel = scopeLabel,
                 onExit = requestExit,
                 onOpenTrash = onOpenTrash,
                 onQueue = { showQueue = true },
@@ -687,6 +696,7 @@ private fun TopBar(
     total: Int,
     remaining: Int,
     trashCount: Int,
+    scopeLabel: String,
     onExit: () -> Unit,
     onOpenTrash: () -> Unit,
     onQueue: () -> Unit,
@@ -732,9 +742,16 @@ private fun TopBar(
                 trackColor = Color.White.copy(alpha = 0.2f),
             )
             Text(
-                "${currentPosition.coerceAtMost(total)} / $total · $remaining 待整理",
+                buildString {
+                    append("${currentPosition.coerceAtMost(total)} / $total · $remaining 待整理")
+                    if (scopeLabel.isNotEmpty()) {
+                        append(" · $scopeLabel")
+                    }
+                },
                 color = Color.White.copy(alpha = 0.7f),
                 style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         TrashTopButton(
@@ -1513,6 +1530,31 @@ private fun suggestedNextQueue(state: HomeUiState): MediaQueue? {
         )
         .firstOrNull()
 }
+
+private fun feedScopeLabel(
+    filterType: MediaType?,
+    filterBucket: String?,
+    assets: List<MediaAsset>,
+): String =
+    buildList {
+        when (filterType) {
+            MediaType.IMAGE -> add("图片")
+            MediaType.VIDEO -> add("视频")
+            null -> Unit
+        }
+        if (filterBucket != null) {
+            val bucketName =
+                assets
+                    .firstOrNull { it.bucketFilterKey() == filterBucket }
+                    ?.bucketName
+                    ?.ifBlank { null }
+                    ?: "未知相册"
+            add(bucketName)
+        }
+    }.joinToString(" · ")
+
+private fun MediaAsset.bucketFilterKey(): String =
+    bucketId.ifBlank { bucketName.ifBlank { "unknown" } }
 
 @Composable
 private fun FeedAction(

@@ -938,7 +938,7 @@ class HomeViewModel(
         val filtered =
             s.allAssets.filter { asset ->
                 (s.filterType == null || asset.mediaType == s.filterType) &&
-                    (s.filterBucket == null || asset.bucketId == s.filterBucket)
+                    (s.filterBucket == null || asset.bucketFilterKey() == s.filterBucket)
             }
         val blockedStatuses = setOf(MediaStatus.TRASH.value, MediaStatus.DELETE.value)
         val statusById = s.statuses.associate { it.localAssetId to it.status }
@@ -1124,6 +1124,9 @@ class HomeViewModel(
         status = status.value,
         updatedAt = System.currentTimeMillis(),
     )
+
+    private fun MediaAsset.bucketFilterKey(): String =
+        bucketId.ifBlank { bucketName.ifBlank { "unknown" } }
 
     private fun albumWithName(
         name: String,
