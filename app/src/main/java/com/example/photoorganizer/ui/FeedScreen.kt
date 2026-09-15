@@ -1281,6 +1281,7 @@ private fun AlbumPickerSheet(
         sortedAlbums.filter {
             query.isBlank() || it.name.contains(trimmedQuery, ignoreCase = true)
         }
+    val starterTags = remember { listOf("家人", "朋友", "旅行", "资料", "美食", "风景") }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -1326,6 +1327,23 @@ private fun AlbumPickerSheet(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            if (trimmedQuery.isBlank() && albums.isEmpty()) {
+                AlbumSheetSectionTitle("快速开始", starterTags.size)
+                Text(
+                    "点一个常用标签，会立即创建并归类当前照片。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(starterTags, key = { it }) { tag ->
+                        AlbumSheetChip(
+                            text = tag,
+                            count = 0,
+                            onClick = { onCreateAndPick(tag) },
+                        )
+                    }
+                }
             }
             if (trimmedQuery.isBlank() && pinnedAlbums.isNotEmpty()) {
                 AlbumSheetSectionTitle("置顶标签", pinnedAlbums.size)
