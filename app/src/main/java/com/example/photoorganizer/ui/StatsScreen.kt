@@ -38,9 +38,26 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.photoorganizer.data.local.UserActionLogEntity
+import com.example.photoorganizer.domain.LibraryStats
 import com.example.photoorganizer.domain.MediaQueue
 import com.example.photoorganizer.domain.QueueType
 import com.example.photoorganizer.domain.StatsService
+import java.util.concurrent.TimeUnit
+
+private const val RECENT_QUEUE_DAYS = 30L
+
+private data class QueueProgressItem(
+    val queue: MediaQueue,
+    val totalCount: Int?,
+) {
+    val remainingCount: Int get() = queue.items.size
+    val progress: Float
+        get() {
+            val total = totalCount ?: return if (remainingCount == 0) 1f else 0f
+            if (total <= 0) return 1f
+            return ((total - remainingCount).toFloat() / total.toFloat()).coerceIn(0f, 1f)
+        }
+}
 
 /** 统计页：把整理进度、空间收益和下一步队列集中到一个轻量视图。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,7 +84,7 @@ fun StatsScreen(
     val todayRemaining = (todayGoal - state.daily.count).coerceAtLeast(0)
     val dailyProgress = state.daily.percent(todayGoal)
     val queueProgressItems =
-        remember(state.queues) {
+        remember(state.queues, state.assets, stats.screenshotCount, stats.largeVideoCount, stats.total) {
             listOf(
                 QueueType.RANDOM,
                 QueueType.SIMILAR,
@@ -76,8 +93,14 @@ fun StatsScreen(
                 QueueType.RECENT_30,
             )
                 .mapNotNull { type -> state.queues.firstOrNull { it.type == type } }
+                .map { queue ->
+                    QueueProgressItem(
+                        queue = queue,
+                        totalCount = queueProgressTotal(queue, state, stats),
+                    )
+                }
         }
-    val recommendedQueue = queueProgressItems.firstOrNull { it.items.isNotEmpty() }
+    val recommendedQueue = queueProgressItems.firstOrNull { it.queue.items.isNotEmpty() }?.queue
 
     Scaffold(topBar = { TopAppBar(title = { Text("统计") }) }) { padding ->
         Column(
@@ -181,10 +204,11 @@ fun StatsScreen(
             }
 
             Text("继续整理", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            queueProgressItems.forEach { queue ->
+            queueProgressItems.forEach { item ->
                 QueueProgressRow(
-                    queue = queue,
+                    item = item,
                     onClick = {
+                        val queue = item.queue
                         if (queue.items.isNotEmpty()) {
                             vm.selectQueue(queue)
                             onPickQueue(queue)
@@ -293,9 +317,10 @@ private fun StatMetricCard(
 
 @Composable
 private fun QueueProgressRow(
-    queue: MediaQueue,
+    item: QueueProgressItem,
     onClick: () -> Unit,
 ) {
+    val queue = item.queue
     Card(
         modifier = Modifier.fillMaxWidth().clickable(enabled = queue.items.isNotEmpty(), onClick = onClick),
         shape = RoundedCornerShape(8.dp),
@@ -310,7 +335,7 @@ private fun QueueProgressRow(
                     )
                     Text(
                         if (queue.items.isNotEmpty()) {
-                            "剩余 ${queue.items.size} 项 · 合计 ${formatBytes(queue.estimatedSavingBytes)}"
+                            queueProgressText(item)
                         } else {
                             "这个队列已整理完"
                         },
@@ -320,6 +345,40 @@ private fun QueueProgressRow(
                 }
                 Text(if (queue.items.isNotEmpty()) "继续" else "完成", style = MaterialTheme.typography.labelLarge)
             }
+            LinearProgressIndicator(
+                progress = { item.progress },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
+
+private fun queueProgressText(item: QueueProgressItem): String {
+    val total = item.totalCount
+    val prefix =
+        if (total != null && total > 0) {
+            "剩余 ${item.remainingCount} / $total 项"
+        } else {
+            "剩余 ${item.remainingCount} 项"
+        }
+    return "$prefix · 合计 ${formatBytes(item.queue.estimatedSavingBytes)}"
+}
+
+private fun queueProgressTotal(
+    queue: MediaQueue,
+    state: HomeUiState,
+    stats: LibraryStats,
+): Int? =
+    when (queue.type) {
+        QueueType.RANDOM,
+        QueueType.UNPROCESSED -> stats.total
+        QueueType.SCREENSHOT -> stats.screenshotCount
+        QueueType.LARGE_VIDEO -> stats.largeVideoCount
+        QueueType.RECENT_30 -> {
+            val cutoff = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(RECENT_QUEUE_DAYS)
+            state.assets.count { it.capturedAt > 0 && it.capturedAt >= cutoff }
+        }
+        QueueType.SIMILAR -> null
+        QueueType.MONTH -> queue.items.size
+        QueueType.FAVORITE -> state.assets.count { it.isFavorite }
+    }
