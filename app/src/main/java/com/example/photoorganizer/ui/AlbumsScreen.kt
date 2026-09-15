@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -67,6 +68,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.photoorganizer.data.MediaAsset
 import com.example.photoorganizer.data.local.AlbumEntity
+
+private val STARTER_ALBUM_NAMES = listOf("家人", "朋友", "旅行", "资料", "美食", "截图")
 
 /** 应用内相册页：负责查看、重命名、删除相册，以及从相册中批量移除媒体。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -126,6 +129,10 @@ fun AlbumsScreen() {
                 onQueryChange = { query = it },
                 onCreate = {
                     vm.createAlbum(name)
+                    name = ""
+                },
+                onCreateName = { suggestedName ->
+                    vm.createAlbum(suggestedName)
                     name = ""
                 },
                 onOpen = { vm.openAlbum(it) },
@@ -240,6 +247,7 @@ private fun AlbumList(
     onDraftChange: (String) -> Unit,
     onQueryChange: (String) -> Unit,
     onCreate: () -> Unit,
+    onCreateName: (String) -> Unit,
     onOpen: (Long) -> Unit,
     onRename: (AlbumEntity) -> Unit,
     onDelete: (AlbumEntity) -> Unit,
@@ -300,6 +308,9 @@ private fun AlbumList(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                if (state.albums.isEmpty() && trimmedDraftName.isEmpty()) {
+                    StarterAlbumSuggestions(onCreateName = onCreateName)
+                }
             }
         }
 
@@ -358,6 +369,27 @@ private fun AlbumList(
                         onTogglePin = { onTogglePin(album.id, album.id !in state.pinnedAlbumIds) },
                         onToggleHidden = { onToggleHidden(album.id, album.id !in state.hiddenAlbumIds) },
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StarterAlbumSuggestions(
+    onCreateName: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "快速开始",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(STARTER_ALBUM_NAMES) { name ->
+                OutlinedButton(onClick = { onCreateName(name) }, shape = RoundedCornerShape(50)) {
+                    Text(name, maxLines = 1)
                 }
             }
         }
