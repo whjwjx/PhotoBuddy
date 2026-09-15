@@ -158,7 +158,7 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth(),
                         enabled = primaryQueue != null,
                     ) {
-                        Text(primaryQueue?.let { "继续 ${it.displayName}" } ?: "已经整理完")
+                        Text(primaryQueue?.let { "继续 ${it.displayName}" } ?: "暂无待整理")
                     }
                     if (state.isScanning) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -427,7 +427,7 @@ private fun queueEntryDetail(queue: MediaQueue?): String =
     if (queue?.items?.isNotEmpty() == true) {
         "${queue.items.size} 项待整理"
     } else {
-        "这个入口已完成"
+        "暂无待整理"
     }
 
 @Composable
@@ -612,7 +612,7 @@ private fun QueueCard(
 
 private fun queueBadge(queue: MediaQueue): String =
     if (queue.items.isEmpty()) {
-        "完成"
+        "已完成"
     } else {
         when (queue.type) {
             QueueType.RANDOM -> "推荐"
@@ -631,7 +631,7 @@ private fun queueBadge(queue: MediaQueue): String =
 
 private fun queueHelper(queue: MediaQueue): String =
     if (queue.items.isEmpty()) {
-        "这个队列已整理完"
+        "这个队列已清空"
     } else {
         when (queue.type) {
             QueueType.RANDOM -> "从一组轻量判断开始"
@@ -652,5 +652,5 @@ private fun queueMeta(queue: MediaQueue): String =
     if (queue.items.isNotEmpty()) {
         "${queue.items.size} 项 · 合计 ${formatBytes(queue.estimatedSavingBytes)}"
     } else {
-        "暂无可整理内容"
+        "没有待处理照片"
     }
