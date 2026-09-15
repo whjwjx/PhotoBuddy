@@ -210,8 +210,10 @@ private fun TodayActivityCard(
                     Text(
                         if (logs.isEmpty()) {
                             "今天还没有整理动作。"
+                        } else if (undoAvailable) {
+                            "按时间倒序显示，最新一步可以撤销。"
                         } else {
-                            "最近 ${logs.size} 次动作会显示在这里。"
+                            "最近 ${logs.size} 次动作仅用于回看。"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -228,6 +230,13 @@ private fun TodayActivityCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    Text(
+                        actionLabel(log),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             log.mediaName,
@@ -243,11 +252,6 @@ private fun TodayActivityCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Text(
-                        actionLabel(log),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
                 }
             }
         }
