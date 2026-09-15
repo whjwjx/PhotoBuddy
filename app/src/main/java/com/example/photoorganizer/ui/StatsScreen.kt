@@ -67,6 +67,7 @@ private data class QueueProgressItem(
 fun StatsScreen(
     onPickQueue: (MediaQueue) -> Unit,
     onOpenTrash: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val vm: HomeViewModel = viewModel()
     val state by vm.uiState.collectAsState()
@@ -193,9 +194,10 @@ fun StatsScreen(
                             "${state.settings.reminderIntervalDays} 天 · ${state.settings.quietStartHour}:00-" +
                                 "${state.settings.quietEndHour}:00 静默"
                         } else {
-                            "温和每日维护"
+                            "点此设置轻提醒"
                         },
                     modifier = Modifier.weight(1f),
+                    onClick = onOpenSettings,
                 )
             }
 

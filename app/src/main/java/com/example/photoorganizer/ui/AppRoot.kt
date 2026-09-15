@@ -136,6 +136,7 @@ fun AppRoot(initialTab: AppTab = AppTab.HOME) {
                 AppTab.STATS -> StatsScreen(
                     onPickQueue = { tab = AppTab.ORGANIZE },
                     onOpenTrash = { tab = AppTab.TRASH },
+                    onOpenSettings = { tab = AppTab.SETTINGS },
                 )
                 AppTab.SETTINGS -> SettingsScreen()
             }
