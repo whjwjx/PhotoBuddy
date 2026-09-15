@@ -294,6 +294,7 @@ fun FeedScreen(
     albumActionTarget?.let { album ->
         AlbumActionSheet(
             album = album,
+            albums = state.albums,
             count = state.albumCounts[album.id] ?: 0,
             pinned = album.id in state.pinnedAlbumIds,
             hidden = album.id in state.hiddenAlbumIds,
@@ -1064,6 +1065,7 @@ private fun AlbumSheetChip(
 @OptIn(ExperimentalMaterial3Api::class)
 private fun AlbumActionSheet(
     album: AlbumEntity,
+    albums: List<AlbumEntity>,
     count: Int,
     pinned: Boolean,
     hidden: Boolean,
@@ -1076,6 +1078,9 @@ private fun AlbumActionSheet(
     var draftName by remember(album.id, album.name) { mutableStateOf(album.name) }
     var showMapping by remember { mutableStateOf(false) }
     val trimmedName = draftName.trim()
+    val hasSameNameAlbum =
+        trimmedName.isNotEmpty() &&
+            albums.any { it.id != album.id && it.name.equals(trimmedName, ignoreCase = true) }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -1100,9 +1105,16 @@ private fun AlbumActionSheet(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            if (hasSameNameAlbum) {
+                Text(
+                    "已有同名相册，请换一个名称。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             Button(
                 onClick = { onRename(trimmedName) },
-                enabled = trimmedName.isNotEmpty() && trimmedName != album.name,
+                enabled = trimmedName.isNotEmpty() && trimmedName != album.name && !hasSameNameAlbum,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("保存名称")
