@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -232,7 +231,6 @@ fun FeedScreen(
                 total = state.queueItems.size,
                 remaining = state.remaining,
                 trashCount = state.trashCount,
-                trashBytes = state.trashBytes,
                 scopeLabel = scopeLabel,
                 canUndo = state.undo != null,
                 onExit = requestExit,
@@ -1031,7 +1029,6 @@ private fun TopBar(
     total: Int,
     remaining: Int,
     trashCount: Int,
-    trashBytes: Long,
     scopeLabel: String,
     canUndo: Boolean,
     onExit: () -> Unit,
@@ -1048,8 +1045,8 @@ private fun TopBar(
     Row(
         Modifier
             .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = 10.dp)
+            .padding(top = 2.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -1062,7 +1059,7 @@ private fun TopBar(
             Modifier
                 .weight(1f)
                 .background(Color.Black.copy(alpha = 0.34f), RoundedCornerShape(8.dp))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
@@ -1101,7 +1098,6 @@ private fun TopBar(
         }
         TrashTopButton(
             count = trashCount,
-            bytes = trashBytes,
             onClick = onOpenTrash,
         )
         FeedTopIconButton(
@@ -1122,7 +1118,7 @@ private fun FeedTopIconButton(
         onClick = onClick,
         modifier =
             Modifier
-                .size(44.dp)
+                .size(40.dp)
                 .background(Color.Black.copy(alpha = 0.34f), CircleShape),
     ) {
         Icon(icon, contentDescription = contentDescription, tint = Color.White)
@@ -1132,7 +1128,6 @@ private fun FeedTopIconButton(
 @Composable
 private fun TrashTopButton(
     count: Int,
-    bytes: Long,
     onClick: () -> Unit,
 ) {
     val highlighted = count > 0
@@ -1148,38 +1143,27 @@ private fun TrashTopButton(
                     },
                 )
                 .clickable(onClick = onClick)
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         Icon(
             Icons.Default.DeleteOutline,
             contentDescription =
                 if (highlighted) {
-                    "待删除 $count 项，预计 ${formatBytes(bytes)}"
+                    "待删除 $count 项"
                 } else {
                     "待删除"
                 },
             tint = Color.White,
             modifier = Modifier.size(18.dp),
         )
-        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-            Text(
-                count.toString(),
-                color = Color.White,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            if (highlighted) {
-                Text(
-                    formatBytes(bytes),
-                    color = Color.White.copy(alpha = 0.72f),
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+        Text(
+            count.toString(),
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 
