@@ -632,48 +632,63 @@ private fun SimilarComparisonStrip(
             .fillMaxWidth()
             .background(Color.Black.copy(alpha = 0.54f), RoundedCornerShape(8.dp))
             .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    "相似组 ${selectedPosition + 1}/${candidates.size}",
+                    "相似照片组",
                     color = Color.White,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "左右滑动或点缩略图对比，可单张处理或批量处理本组。",
+                    "左右切换候选，选出最值得留下的一张。",
                     color = Color.White.copy(alpha = 0.72f),
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                current?.let { asset ->
-                    Text(
-                        similarMeta(asset),
-                        color = Color.White.copy(alpha = 0.7f),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Text(
-                    similarGroupMeta(candidates.map { it.asset }),
-                    color = Color.White.copy(alpha = 0.66f),
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = onLaterAll) {
-                    Text("本组稍后", color = Color.White)
-                }
-                TextButton(onClick = onKeepCurrent) {
-                    Text("留当前，待删其余", color = Color.White)
-                }
-            }
+            Text(
+                "${selectedPosition + 1}/${candidates.size}",
+                modifier =
+                    Modifier
+                        .background(Color.White.copy(alpha = 0.14f), RoundedCornerShape(100.dp))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+        current?.let { asset ->
+            Text(
+                "当前 · ${similarMeta(asset)}",
+                color = Color.White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            similarGroupMeta(candidates.map { it.asset }),
+            color = Color.White.copy(alpha = 0.62f),
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            SimilarGroupAction(
+                label = "全部稍后",
+                helper = "保留本组待复看",
+                modifier = Modifier.weight(1f),
+                onClick = onLaterAll,
+            )
+            SimilarGroupAction(
+                label = "留当前",
+                helper = "其余进待删除",
+                modifier = Modifier.weight(1f),
+                onClick = onKeepCurrent,
+            )
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(candidates, key = { _, candidate -> candidate.asset.id }) { position, candidate ->
@@ -715,6 +730,40 @@ private fun SimilarComparisonStrip(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SimilarGroupAction(
+    label: String,
+    helper: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.White.copy(alpha = 0.13f))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        Text(
+            label,
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            helper,
+            color = Color.White.copy(alpha = 0.64f),
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -1081,8 +1130,8 @@ private fun ActionBar(
     ) {
         FeedAction(
             icon = Icons.Default.DeleteOutline,
-            label = "待删除",
-            helper = "上滑",
+            label = if (similarMode) "删这张" else "待删除",
+            helper = if (similarMode) "进待删" else "上滑",
             accent = Color(0xFFFF453A),
             modifier = Modifier.weight(1f),
             onClick = onTrash,
@@ -1097,7 +1146,7 @@ private fun ActionBar(
         )
         FeedAction(
             icon = Icons.Default.Check,
-            label = if (similarMode) "当前保留" else "保留",
+            label = if (similarMode) "保留这张" else "保留",
             helper = if (similarMode) "单张" else "右滑",
             accent = Color(0xFF34C759),
             modifier = Modifier.weight(1f),
@@ -1560,7 +1609,6 @@ private fun albumSheetMeta(
 
 private fun similarMeta(asset: MediaAsset): String =
     buildString {
-        append("当前：")
         if (asset.width > 0 && asset.height > 0) {
             append("${asset.width}×${asset.height} · ")
         }
