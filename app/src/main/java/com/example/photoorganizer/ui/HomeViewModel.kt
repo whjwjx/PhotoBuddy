@@ -103,6 +103,7 @@ data class HomeUiState(
     val albumLastAddedAt: Map<Long, Long> = emptyMap(),
     val pinnedAlbumIds: Set<Long> = emptySet(),
     val hiddenAlbumIds: Set<Long> = emptySet(),
+    val albumOrderIds: List<Long> = emptyList(),
     val openAlbumId: Long? = null,
     val openAlbumMediaIds: List<Long> = emptyList(),
     // --- P4：增量扫描 / 每日整理任务 ---
@@ -207,6 +208,9 @@ class HomeViewModel(
         }
         viewModelScope.launch {
             settingsRepo.hiddenAlbumIds.collect { ids -> _uiState.update { it.copy(hiddenAlbumIds = ids) } }
+        }
+        viewModelScope.launch {
+            settingsRepo.albumOrderIds.collect { ids -> _uiState.update { it.copy(albumOrderIds = ids) } }
         }
         viewModelScope.launch {
             logDao.observeRecent(20).collect { list -> _uiState.update { it.copy(recentLogs = list) } }
@@ -775,6 +779,28 @@ class HomeViewModel(
         }
     }
 
+    fun moveAlbumOrder(
+        albumId: Long,
+        direction: Int,
+    ) {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val visibleIds =
+                orderedAlbumIds(
+                    albums = state.albums.filter { it.id !in state.hiddenAlbumIds },
+                    orderIds = state.albumOrderIds,
+                )
+            val from = visibleIds.indexOf(albumId)
+            if (from < 0) return@launch
+            val to = (from + direction).coerceIn(0, visibleIds.lastIndex)
+            if (from == to) return@launch
+            val next = visibleIds.toMutableList()
+            val moved = next.removeAt(from)
+            next.add(to, moved)
+            settingsRepo.setAlbumOrderIds(next)
+        }
+    }
+
     /**
      * 将系统图库里的一个来源相册导入为 App 内本地映射。
      * 这里只建立本地映射并标记未整理项为已归类，不移动、不重命名系统文件。
@@ -1248,6 +1274,20 @@ class HomeViewModel(
 
     private fun MediaAsset.bucketFilterKey(): String =
         bucketId.ifBlank { bucketName.ifBlank { "unknown" } }
+
+    private fun orderedAlbumIds(
+        albums: List<AlbumEntity>,
+        orderIds: List<Long>,
+    ): List<Long> {
+        val existingIds = albums.map { it.id }.toSet()
+        val ordered = orderIds.filter { it in existingIds }
+        val missing =
+            albums
+                .filter { it.id !in ordered }
+                .sortedByDescending { it.createdAt }
+                .map { it.id }
+        return ordered + missing
+    }
 
     private fun albumWithName(
         name: String,

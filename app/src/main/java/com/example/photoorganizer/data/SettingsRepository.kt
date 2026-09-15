@@ -48,6 +48,7 @@ class SettingsRepository(
         val DAILY_COUNT = intPreferencesKey("daily_count")
         val PINNED_ALBUM_IDS = stringPreferencesKey("pinned_album_ids")
         val HIDDEN_ALBUM_IDS = stringPreferencesKey("hidden_album_ids")
+        val ALBUM_ORDER_IDS = stringPreferencesKey("album_order_ids")
         val REMINDER_ENABLED = booleanPreferencesKey("reminder_enabled")
         val REMINDER_INTERVAL_DAYS = intPreferencesKey("reminder_interval_days")
         val QUIET_START_HOUR = intPreferencesKey("quiet_start_hour")
@@ -81,6 +82,9 @@ class SettingsRepository(
 
     val hiddenAlbumIds: Flow<Set<Long>> =
         context.settingsDataStore.data.map { p -> parseIdSet(p[Keys.HIDDEN_ALBUM_IDS].orEmpty()) }
+
+    val albumOrderIds: Flow<List<Long>> =
+        context.settingsDataStore.data.map { p -> parseIdList(p[Keys.ALBUM_ORDER_IDS].orEmpty()) }
 
     suspend fun setDailyGoal(v: Int) {
         context.settingsDataStore.edit { it[Keys.DAILY_GOAL] = v }
@@ -133,6 +137,12 @@ class SettingsRepository(
         }
     }
 
+    suspend fun setAlbumOrderIds(albumIds: List<Long>) {
+        context.settingsDataStore.edit { p ->
+            p[Keys.ALBUM_ORDER_IDS] = albumIds.distinct().joinToString(",")
+        }
+    }
+
     suspend fun getLastScanMs(): Long = context.settingsDataStore.data.first()[Keys.LAST_SCAN_MS] ?: 0L
 
     suspend fun setLastScanMs(v: Long) {
@@ -159,8 +169,11 @@ class SettingsRepository(
     private fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
     private fun parseIdSet(raw: String): Set<Long> =
+        parseIdList(raw).toSet()
+
+    private fun parseIdList(raw: String): List<Long> =
         raw
             .split(",")
             .mapNotNull { it.trim().toLongOrNull() }
-            .toSet()
+            .distinct()
 }

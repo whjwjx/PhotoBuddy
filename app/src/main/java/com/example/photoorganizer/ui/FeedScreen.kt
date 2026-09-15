@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -102,11 +103,9 @@ import com.example.photoorganizer.domain.QueueEngine
 import com.example.photoorganizer.domain.QueueType
 import kotlinx.coroutines.delay
 import kotlin.math.abs
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 private const val SWIPE_ACTION_THRESHOLD = 120f
-private const val SWIPE_HINT_THRESHOLD = 36f
 
 /** Slidebox 式单卡整理流：当前照片做完一个决策后自动推进到下一张。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -168,10 +167,11 @@ fun FeedScreen(
                 onUndo = undoLastAction,
                 modifier =
                     Modifier
-                        .align(Alignment.BottomCenter)
+                        .align(Alignment.TopCenter)
                         .zIndex(8f)
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 24.dp),
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 82.dp),
             )
         } else {
             val similarCandidates =
@@ -233,25 +233,6 @@ fun FeedScreen(
                 onQueue = { showQueue = true },
             )
 
-            GestureHints(
-                visible =
-                    abs(dragX) <= SWIPE_HINT_THRESHOLD &&
-                        abs(dragY) <= SWIPE_HINT_THRESHOLD,
-                similarMode = showSimilarComparison,
-                isAppFavorite = isAppFavorite,
-                modifier = Modifier.align(Alignment.Center),
-            )
-            SwipeFeedback(
-                dragX = dragX,
-                dragY = dragY,
-                similarMode = showSimilarComparison,
-                isAppFavorite = isAppFavorite,
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .zIndex(3f),
-            )
-
             Column(
                 modifier =
                     Modifier
@@ -282,7 +263,7 @@ fun FeedScreen(
                 AlbumQuickBar(
                     state = state,
                     onPick = { vm.addCurrentToAlbum(it) },
-                    onManage = { albumActionTarget = it },
+                    onMove = { albumId, direction -> vm.moveAlbumOrder(albumId, direction) },
                     onMore = { showAddAlbum = true },
                 )
             }
@@ -294,11 +275,11 @@ fun FeedScreen(
                 onUndo = undoLastAction,
                 modifier =
                     Modifier
-                        .align(Alignment.BottomCenter)
+                        .align(Alignment.TopCenter)
                         .zIndex(8f)
-                        .navigationBarsPadding()
+                        .statusBarsPadding()
                         .padding(horizontal = 16.dp)
-                        .padding(bottom = 268.dp),
+                        .padding(top = 82.dp),
             )
         }
     }
@@ -619,12 +600,6 @@ private data class SimilarCandidate(
     val asset: MediaAsset,
 )
 
-private data class DragDecision(
-    val label: String,
-    val helper: String,
-    val color: Color,
-)
-
 private data class UndoVisual(
     val color: Color,
     val detail: String,
@@ -857,120 +832,6 @@ private fun similarCandidatesForCurrent(
 }
 
 @Composable
-private fun SwipeFeedback(
-    dragX: Float,
-    dragY: Float,
-    similarMode: Boolean,
-    isAppFavorite: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val horizontal = abs(dragX) > abs(dragY)
-    val distance = maxOf(abs(dragX), abs(dragY))
-    val active = distance > SWIPE_HINT_THRESHOLD
-    if (!active) return
-    val armed = distance >= SWIPE_ACTION_THRESHOLD
-    val label =
-        when {
-            similarMode && horizontal && dragX > 0 -> "上一张"
-            similarMode && horizontal -> "下一张"
-            horizontal && dragX > 0 -> "保留"
-            horizontal -> "稍后"
-            dragY < 0 -> "加入待删除"
-            isAppFavorite -> "取消收藏"
-            else -> "收藏"
-        }
-    val helper = if (armed) {
-        if (similarMode && horizontal) "松手切换" else "松手执行"
-    } else {
-        "继续拖动"
-    }
-    val color =
-        when (label) {
-            "加入待删除" -> Color(0xFFE53935)
-            "取消收藏" -> Color(0xFF8E8E93)
-            "收藏" -> Color(0xFFFFC107)
-            "保留" -> Color(0xFF43A047)
-            "上一张", "下一张" -> Color(0xFF0A84FF)
-            else -> Color(0xFF42A5F5)
-        }
-    val decision = DragDecision(label = label, helper = helper, color = color)
-    val alpha = min(0.9f, (distance / 180f).coerceAtLeast(0.28f))
-    val alignment =
-        when {
-            !horizontal -> Alignment.TopCenter
-            dragX > 0 -> Alignment.CenterStart
-            else -> Alignment.CenterEnd
-        }
-    val padding =
-        when {
-            !horizontal -> Modifier.statusBarsPadding().padding(top = 82.dp, start = 18.dp, end = 18.dp)
-            dragX > 0 -> Modifier.padding(start = 18.dp)
-            else -> Modifier.padding(end = 18.dp)
-        }
-    Box(
-        modifier =
-            modifier
-                .background(
-                    if (!horizontal) {
-                        decision.color.copy(alpha = alpha * 0.18f)
-                    } else {
-                        Color.Transparent
-                    },
-                ),
-    ) {
-        SwipeTargetPill(
-            decision = decision,
-            alpha = alpha,
-            armed = armed,
-            modifier =
-                Modifier
-                    .align(alignment)
-                    .then(padding),
-        )
-    }
-}
-
-@Composable
-private fun SwipeTargetPill(
-    decision: DragDecision,
-    alpha: Float,
-    armed: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier =
-            modifier
-                .background(decision.color.copy(alpha = alpha), RoundedCornerShape(100.dp))
-                .border(
-                    BorderStroke(
-                        width = if (armed) 2.dp else 1.dp,
-                        color = Color.White.copy(alpha = if (armed) 0.82f else 0.34f),
-                    ),
-                    RoundedCornerShape(100.dp),
-                )
-                .padding(horizontal = 24.dp, vertical = 13.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(1.dp),
-    ) {
-        Text(
-            decision.label,
-            color = Color.White,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            decision.helper,
-            color = Color.White.copy(alpha = 0.84f),
-            style = MaterialTheme.typography.labelMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
 private fun TopBar(
     title: String,
     currentPosition: Int,
@@ -1197,40 +1058,6 @@ private fun undoVisual(message: String): UndoVisual =
     }
 
 @Composable
-private fun GestureHints(
-    visible: Boolean,
-    similarMode: Boolean,
-    isAppFavorite: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    if (!visible) return
-    Column(
-        modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(120.dp),
-    ) {
-        Text(
-            if (isAppFavorite) "下滑取消收藏" else "下滑收藏",
-            color = Color.White.copy(alpha = 0.45f),
-            style = MaterialTheme.typography.labelMedium,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(96.dp)) {
-            Text(
-                if (similarMode) "上一张" else "左滑稍后",
-                color = Color.White.copy(alpha = 0.4f),
-                style = MaterialTheme.typography.labelMedium,
-            )
-            Text(
-                if (similarMode) "下一张" else "右滑保留",
-                color = Color.White.copy(alpha = 0.4f),
-                style = MaterialTheme.typography.labelMedium,
-            )
-        }
-        Text("上滑加入待删除", color = Color.White.copy(alpha = 0.45f), style = MaterialTheme.typography.labelMedium)
-    }
-}
-
-@Composable
 private fun AssetCaption(asset: MediaAsset) {
     Column(
         Modifier
@@ -1273,7 +1100,7 @@ private fun ActionBar(
         FeedAction(
             icon = Icons.Default.DeleteOutline,
             label = if (similarMode) "删这张" else "待删除",
-            helper = if (similarMode) "进待删" else "上滑",
+            helper = if (similarMode) "删这张" else "待删除",
             accent = Color(0xFFFF453A),
             modifier = Modifier.weight(1f),
             onClick = onTrash,
@@ -1281,7 +1108,7 @@ private fun ActionBar(
         FeedAction(
             icon = Icons.Default.Schedule,
             label = if (similarMode) "当前稍后" else "稍后",
-            helper = if (similarMode) "单张" else "左滑",
+            helper = if (similarMode) "当前稍后" else "稍后",
             accent = Color(0xFF8E8E93),
             modifier = Modifier.weight(1f),
             onClick = onLater,
@@ -1289,7 +1116,7 @@ private fun ActionBar(
         FeedAction(
             icon = Icons.Default.Check,
             label = if (similarMode) "保留这张" else "保留",
-            helper = if (similarMode) "单张" else "右滑",
+            helper = if (similarMode) "保留这张" else "保留",
             accent = Color(0xFF34C759),
             modifier = Modifier.weight(1f),
             onClick = onKeep,
@@ -1297,7 +1124,7 @@ private fun ActionBar(
         FeedAction(
             icon = Icons.Default.Star,
             label = if (isAppFavorite) "取消收藏" else "收藏",
-            helper = "下滑",
+            helper = if (isAppFavorite) "取消收藏" else "收藏",
             accent = if (isAppFavorite) Color(0xFF8E8E93) else Color(0xFFFFCC00),
             modifier = Modifier.weight(1f),
             onClick = onFavorite,
@@ -1309,45 +1136,132 @@ private fun ActionBar(
 private fun AlbumQuickBar(
     state: HomeUiState,
     onPick: (Long) -> Unit,
-    onManage: (AlbumEntity) -> Unit,
+    onMove: (Long, Int) -> Unit,
     onMore: () -> Unit,
 ) {
+    var sortingAlbumId by remember { mutableStateOf<Long?>(null) }
     val quickAlbums =
-        remember(state.albums, state.albumCounts, state.albumLastAddedAt, state.pinnedAlbumIds, state.hiddenAlbumIds) {
-            sortedAlbumsForOrganize(
+        remember(state.albums, state.hiddenAlbumIds, state.albumOrderIds) {
+            orderedAlbumsForQuickBar(
                 albums = state.albums.filter { it.id !in state.hiddenAlbumIds },
-                counts = state.albumCounts,
-                lastAddedAt = state.albumLastAddedAt,
-                pinnedAlbumIds = state.pinnedAlbumIds,
-                hiddenAlbumIds = state.hiddenAlbumIds,
-            ).take(5)
+                orderIds = state.albumOrderIds,
+            )
         }
+    val quickItems =
+        remember(quickAlbums, state.albums.isEmpty()) {
+            quickAlbums.map { QuickAlbumItem.Album(it) } +
+                QuickAlbumItem.More(
+                    text = if (state.albums.isEmpty()) "新建相册" else "更多相册",
+                    icon = if (state.albums.isEmpty()) Icons.Default.Add else Icons.Default.MoreHoriz,
+                )
+        }
+    val columns = remember(quickItems) { quickItems.chunked(2) }
     Box(
         Modifier
             .fillMaxWidth()
+            .height(92.dp)
             .background(Color.Black.copy(alpha = 0.46f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 6.dp, vertical = 5.dp),
+            .padding(horizontal = 6.dp, vertical = 6.dp),
     ) {
         LazyRow(
+            modifier = Modifier.fillMaxHeight(),
             horizontalArrangement = Arrangement.spacedBy(7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            items(quickAlbums) { album ->
-                AlbumChip(
-                    text = album.name,
-                    onClick = { onPick(album.id) },
-                    onLongClick = { onManage(album) },
-                )
-            }
-            item {
-                AlbumChip(
-                    text = if (state.albums.isEmpty()) "新建相册" else "更多相册",
-                    icon = if (state.albums.isEmpty()) Icons.Default.Add else Icons.Default.MoreHoriz,
-                    onClick = onMore,
-                )
+            itemsIndexed(
+                columns,
+                key = { index, column -> column.joinToString("-") { it.key } + "-$index" },
+            ) { _, column ->
+                Column(
+                    modifier = Modifier.fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    column.forEach { item ->
+                        when (item) {
+                            is QuickAlbumItem.Album ->
+                                SortableAlbumChip(
+                                    album = item.album,
+                                    sorting = sortingAlbumId == item.album.id,
+                                    onSortStart = { sortingAlbumId = item.album.id },
+                                    onSortEnd = { sortingAlbumId = null },
+                                    onMove = onMove,
+                                    onPick = { onPick(item.album.id) },
+                                )
+                            is QuickAlbumItem.More ->
+                                AlbumChip(
+                                    text = item.text,
+                                    icon = item.icon,
+                                    onClick = onMore,
+                                )
+                        }
+                    }
+                }
             }
         }
     }
+}
+
+private sealed class QuickAlbumItem {
+    abstract val key: String
+
+    data class Album(val album: AlbumEntity) : QuickAlbumItem() {
+        override val key: String = "album-${album.id}"
+    }
+
+    data class More(
+        val text: String,
+        val icon: ImageVector,
+    ) : QuickAlbumItem() {
+        override val key: String = "more"
+    }
+}
+
+@Composable
+private fun SortableAlbumChip(
+    album: AlbumEntity,
+    sorting: Boolean,
+    onSortStart: () -> Unit,
+    onSortEnd: () -> Unit,
+    onMove: (Long, Int) -> Unit,
+    onPick: () -> Unit,
+) {
+    var dragOffset by remember(album.id) { mutableStateOf(0f) }
+    AlbumChip(
+        text = album.name,
+        onClick = onPick,
+        modifier =
+            Modifier
+                .graphicsLayer {
+                    scaleX = if (sorting) 1.04f else 1f
+                    scaleY = if (sorting) 1.04f else 1f
+                    alpha = if (sorting) 0.96f else 1f
+                }
+                .pointerInput(album.id) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = {
+                            dragOffset = 0f
+                            onSortStart()
+                        },
+                        onDragEnd = {
+                            dragOffset = 0f
+                            onSortEnd()
+                        },
+                        onDragCancel = {
+                            dragOffset = 0f
+                            onSortEnd()
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            dragOffset += dragAmount.x
+                            if (abs(dragOffset) >= 64f) {
+                                val direction = if (dragOffset > 0f) 1 else -1
+                                onMove(album.id, direction)
+                                dragOffset = 0f
+                            }
+                        },
+                    )
+                },
+    )
 }
 
 @Composable
@@ -1356,12 +1270,13 @@ private fun AlbumChip(
     text: String,
     detail: String? = null,
     icon: ImageVector? = null,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier =
-            Modifier
+            modifier
                 .clip(RoundedCornerShape(100.dp))
                 .background(Color.White.copy(alpha = 0.14f))
                 .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)), RoundedCornerShape(100.dp))
@@ -1745,6 +1660,19 @@ private fun sortedAlbumsForOrganize(
             .thenByDescending { it.createdAt }
             .thenBy { it.name },
     )
+
+private fun orderedAlbumsForQuickBar(
+    albums: List<AlbumEntity>,
+    orderIds: List<Long>,
+): List<AlbumEntity> {
+    val albumsById = albums.associateBy { it.id }
+    val ordered = orderIds.mapNotNull { albumsById[it] }
+    val missing =
+        albums
+            .filter { album -> ordered.none { it.id == album.id } }
+            .sortedWith(compareByDescending<AlbumEntity> { it.createdAt }.thenBy { it.name })
+    return ordered + missing
+}
 
 private fun albumSheetMeta(
     count: Int,
