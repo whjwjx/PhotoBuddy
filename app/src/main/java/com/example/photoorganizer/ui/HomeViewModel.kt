@@ -934,9 +934,23 @@ class HomeViewModel(
         }
 
     private suspend fun finishTrashDelete(ids: Set<Long>) {
+        runCatching { library.sync(full = false) }
+        val remainingIds = indexDao.allIds().toSet()
+        val deletedIds = ids.filter { it !in remainingIds }.toSet()
+        val failedIds = ids - deletedIds
+        if (deletedIds.isEmpty()) {
+            _uiState.update {
+                it.copy(
+                    error = "删除未完成，系统仍能看到这些照片，已保留在待删除复核页。",
+                    pendingDelete = null,
+                    trashDeleteIdsInFlight = emptySet(),
+                )
+            }
+            return
+        }
         val byId = _uiState.value.allAssets.associateBy { it.id }
         var freed = 0L
-        ids.forEach { id ->
+        deletedIds.forEach { id ->
             byId[id]?.let { asset ->
                 val before = dao.get(asset.id)?.status.orEmpty()
                 dao.upsert(toEntity(asset, MediaStatus.DELETE))
@@ -959,11 +973,17 @@ class HomeViewModel(
         _uiState.update { s ->
             recompute(
                 s.copy(
-                    allAssets = s.allAssets.filter { it.id !in ids },
+                    allAssets = s.allAssets.filter { it.id !in deletedIds },
                     freedBytes = s.freedBytes + freed,
                     pendingDelete = null,
                     trashDeleteIdsInFlight = emptySet(),
                     undo = null,
+                    error =
+                        if (failedIds.isNotEmpty()) {
+                            "${failedIds.size} 张照片未被系统移除，已继续保留在待删除复核页。"
+                        } else {
+                            s.error
+                        },
                 ),
             )
         }
