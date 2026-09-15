@@ -148,7 +148,7 @@ fun TrashScreen(onExit: () -> Unit) {
             )
         },
         bottomBar = {
-            if (visibleItems.isNotEmpty()) {
+            if (selectedIds.isNotEmpty()) {
                 TrashActionBar(
                     selectedCount = selectedIds.size,
                     selectedBytes = selectedBytes,
@@ -458,16 +458,12 @@ private fun TrashActionBar(
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Text(
-                        if (selectedCount > 0) "已选 $selectedCount 项待复核" else "先选择要处理的照片",
+                        "已选 $selectedCount 项待复核",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        if (selectedCount > 0) {
-                            "预计释放 ${formatBytes(selectedBytes)}，系统确认后才计入已释放"
-                        } else {
-                            "点照片即可选择；长按可预览单张"
-                        },
+                        "预计释放 ${formatBytes(selectedBytes)}，系统确认后才计入已释放",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
@@ -478,7 +474,6 @@ private fun TrashActionBar(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(
                     onClick = onRestore,
-                    enabled = selectedCount > 0,
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -487,7 +482,6 @@ private fun TrashActionBar(
                 }
                 Button(
                     onClick = onDelete,
-                    enabled = selectedCount > 0,
                     modifier = Modifier.weight(1f),
                     colors =
                         ButtonDefaults.buttonColors(
