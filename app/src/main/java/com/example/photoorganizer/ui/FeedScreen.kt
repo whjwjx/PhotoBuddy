@@ -32,6 +32,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -120,6 +121,10 @@ fun FeedScreen(
     var dragX by remember { mutableStateOf(0f) }
     var dragY by remember { mutableStateOf(0f) }
     var appliedInitialQueueTypeName by remember { mutableStateOf<String?>(null) }
+    val undoLastAction = {
+        vm.clearFeedback()
+        vm.undoLast()
+    }
     val requestExit = {
         if (state.trashCount > 0) {
             showExitReview = true
@@ -152,10 +157,7 @@ fun FeedScreen(
             UndoBanner(
                 visible = state.feedbackMessage != null,
                 message = state.feedbackMessage.orEmpty(),
-                onUndo = {
-                    vm.clearFeedback()
-                    vm.undoLast()
-                },
+                onUndo = undoLastAction,
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
@@ -215,8 +217,10 @@ fun FeedScreen(
                 trashCount = state.trashCount,
                 trashBytes = state.trashBytes,
                 scopeLabel = scopeLabel,
+                canUndo = state.undo != null,
                 onExit = requestExit,
                 onOpenTrash = onOpenTrash,
+                onUndo = undoLastAction,
                 onQueue = { showQueue = true },
             )
 
@@ -270,10 +274,7 @@ fun FeedScreen(
             UndoBanner(
                 visible = state.feedbackMessage != null,
                 message = state.feedbackMessage.orEmpty(),
-                onUndo = {
-                    vm.clearFeedback()
-                    vm.undoLast()
-                },
+                onUndo = undoLastAction,
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
@@ -702,8 +703,10 @@ private fun TopBar(
     trashCount: Int,
     trashBytes: Long,
     scopeLabel: String,
+    canUndo: Boolean,
     onExit: () -> Unit,
     onOpenTrash: () -> Unit,
+    onUndo: () -> Unit,
     onQueue: () -> Unit,
 ) {
     val progress =
@@ -757,6 +760,13 @@ private fun TopBar(
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (canUndo) {
+            FeedTopIconButton(
+                icon = Icons.AutoMirrored.Filled.Undo,
+                contentDescription = "撤销上一动作",
+                onClick = onUndo,
             )
         }
         TrashTopButton(
