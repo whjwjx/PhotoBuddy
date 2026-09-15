@@ -1191,7 +1191,7 @@ private fun undoVisual(message: String): UndoVisual =
         message.contains("已撤销") ->
             UndoVisual(Color(0xFF34C759), "已回到上一步")
         message.contains("相册") || message.contains("已加入") || message.contains("已在") ->
-            UndoVisual(Color(0xFF0A84FF), "已加入相册")
+            UndoVisual(Color(0xFF0A84FF), "已记录本地映射")
         else ->
             UndoVisual(Color(0xFF34C759), "继续下一张")
     }
@@ -1571,9 +1571,9 @@ private fun AlbumPickerSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("加入相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("归类到本地相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
-                    "点相册后继续下一张，不会移动系统相册文件",
+                    "点选后立即继续下一张；只记录 App 内映射，不移动系统相册文件。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1584,12 +1584,12 @@ private fun AlbumPickerSheet(
             ) {
                 Icon(Icons.Default.PhotoAlbum, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("添加已有系统相册")
+                Text("导入系统相册映射")
             }
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                label = { Text("搜索或新建相册") },
+                label = { Text("搜索或新建本地相册") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -1602,13 +1602,13 @@ private fun AlbumPickerSheet(
                 }
             } else if (trimmedQuery.isNotEmpty()) {
                 Text(
-                    "已有同名相册，点下方结果加入。",
+                    "已有同名映射，点下方结果即可归类。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
                 Text(
-                    "输入名称可直接创建，点相册会立即归类当前照片。",
+                    "输入名称可直接创建本地映射，点相册会立即归类当前照片。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1616,7 +1616,7 @@ private fun AlbumPickerSheet(
             if (trimmedQuery.isBlank() && albums.isEmpty()) {
                 AlbumSheetSectionTitle("快速开始", starterAlbums.size)
                 Text(
-                    "点一个常用相册，会立即创建并归类当前照片。",
+                    "点一个常用分类，会立即创建本地映射并归类当前照片。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1657,13 +1657,13 @@ private fun AlbumPickerSheet(
                 }
             }
             AlbumSheetSectionTitle(
-                title = if (trimmedQuery.isBlank()) "全部相册" else "搜索结果",
+                title = if (trimmedQuery.isBlank()) "全部本地映射" else "搜索结果",
                 count = filtered.size,
             )
             if (filtered.isEmpty()) {
                 Text(
                     if (albums.isEmpty()) {
-                        "还没有相册，可以先新建一个。"
+                        "还没有本地相册映射，可以先新建一个。"
                     } else {
                         "没有匹配的相册。"
                     },

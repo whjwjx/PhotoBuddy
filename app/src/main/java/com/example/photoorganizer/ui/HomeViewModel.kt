@@ -776,7 +776,7 @@ class HomeViewModel(
     }
 
     /**
-     * 将系统图库里的一个来源相册导入为 App 内整理相册。
+     * 将系统图库里的一个来源相册导入为 App 内本地映射。
      * 这里只建立本地映射并标记未整理项为已归类，不移动、不重命名系统文件。
      */
     fun importSystemAlbum(
@@ -816,7 +816,7 @@ class HomeViewModel(
                             mediaName = asset.displayName,
                             mediaType = asset.mediaType.name,
                             action = MediaStatus.ALBUM.value,
-                            source = "导入系统相册 · $name",
+                            source = "导入系统相册映射 · $name",
                             beforeState = before,
                             afterState = MediaStatus.ALBUM.value,
                             freedBytes = 0L,

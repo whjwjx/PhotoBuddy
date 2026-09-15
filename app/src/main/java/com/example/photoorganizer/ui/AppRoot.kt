@@ -259,7 +259,7 @@ private fun PermissionScreen(onRequest: () -> Unit) {
             PermissionTip(
                 icon = Icons.Default.Security,
                 title = "相册整理可撤回",
-                body = "加入或移出相册不会删除照片，真正删除前会单独确认。",
+                body = "相册归类只记录本地映射，不移动照片；真正删除前会单独确认。",
             )
             Spacer(Modifier.height(8.dp))
         }
