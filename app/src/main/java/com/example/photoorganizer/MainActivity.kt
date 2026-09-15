@@ -13,14 +13,20 @@ import com.example.photoorganizer.ui.theme.PhotoOrganizerTheme
 
 class MainActivity : ComponentActivity() {
     private var targetTab by mutableStateOf(AppTab.HOME)
+    private var targetQueueType by mutableStateOf<String?>(null)
+    private var targetQueueRequestId by mutableStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        targetTab = tabFromIntent()
+        applyIntentTarget()
         setContent {
             PhotoOrganizerTheme {
-                AppRoot(initialTab = targetTab)
+                AppRoot(
+                    initialTab = targetTab,
+                    initialQueueTypeName = targetQueueType,
+                    initialQueueRequestId = targetQueueRequestId,
+                )
             }
         }
     }
@@ -28,7 +34,13 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        applyIntentTarget()
+    }
+
+    private fun applyIntentTarget() {
         targetTab = tabFromIntent()
+        targetQueueType = queueTypeFromIntent()
+        targetQueueRequestId += 1
     }
 
     private fun tabFromIntent(): AppTab =
@@ -38,7 +50,11 @@ class MainActivity : ComponentActivity() {
             AppTab.HOME
         }
 
+    private fun queueTypeFromIntent(): String? =
+        intent?.getStringExtra(EXTRA_QUEUE_TYPE)?.takeIf { it.isNotBlank() }
+
     companion object {
         const val EXTRA_OPEN_ORGANIZE = "open_organize"
+        const val EXTRA_QUEUE_TYPE = "queue_type"
     }
 }

@@ -103,6 +103,8 @@ private const val SWIPE_HINT_THRESHOLD = 36f
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedScreen(
+    initialQueueTypeName: String? = null,
+    onInitialQueueConsumed: () -> Unit = {},
     onExit: () -> Unit,
     onOpenTrash: () -> Unit,
 ) {
@@ -114,11 +116,20 @@ fun FeedScreen(
     var albumActionTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var dragX by remember { mutableStateOf(0f) }
     var dragY by remember { mutableStateOf(0f) }
+    var appliedInitialQueueTypeName by remember { mutableStateOf<String?>(null) }
     val requestExit = {
         if (state.trashCount > 0) {
             showExitReview = true
         } else {
             onExit()
+        }
+    }
+    LaunchedEffect(initialQueueTypeName, state.queues) {
+        val target = initialQueueTypeName?.takeIf { it.isNotBlank() }
+        if (target != null && appliedInitialQueueTypeName != target && state.queues.isNotEmpty()) {
+            vm.selectQueueType(target)
+            appliedInitialQueueTypeName = target
+            onInitialQueueConsumed()
         }
     }
 

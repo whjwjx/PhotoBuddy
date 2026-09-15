@@ -298,6 +298,26 @@ class HomeViewModel(
         }
     }
 
+    fun selectQueueType(queueTypeName: String) {
+        val requestedType = QueueType.values().firstOrNull { it.name == queueTypeName } ?: return
+        _uiState.update { s ->
+            val picked =
+                s.queues.firstOrNull { it.type == requestedType && it.items.isNotEmpty() }
+                    ?: s.queues.firstOrNull { it.type == QueueType.RANDOM && it.items.isNotEmpty() }
+                    ?: s.queues.firstOrNull { it.type == QueueType.UNPROCESSED && it.items.isNotEmpty() }
+                    ?: s.queues.firstOrNull { it.items.isNotEmpty() }
+                    ?: s.queues.firstOrNull { it.type == requestedType }
+                    ?: return@update s
+            recompute(
+                s.copy(
+                    queueType = picked.type,
+                    queueTitle = picked.title,
+                    currentIndex = 0,
+                ),
+            )
+        }
+    }
+
     /** 用户对当前卡片的决策。删除在 Slidebox 模型里只进入 App 内待删除区。 */
     fun act(status: MediaStatus) {
         val nextStatus = if (status == MediaStatus.DELETE) MediaStatus.TRASH else status

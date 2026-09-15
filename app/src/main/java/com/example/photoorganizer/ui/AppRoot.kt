@@ -69,7 +69,11 @@ enum class AppTab(val label: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppRoot(initialTab: AppTab = AppTab.HOME) {
+fun AppRoot(
+    initialTab: AppTab = AppTab.HOME,
+    initialQueueTypeName: String? = null,
+    initialQueueRequestId: Int = 0,
+) {
     val context = LocalContext.current
     val permissions = remember { requiredPermissions() }
     var granted by remember {
@@ -88,8 +92,12 @@ fun AppRoot(initialTab: AppTab = AppTab.HOME) {
     }
 
     var tab by remember { mutableStateOf(initialTab) }
+    var pendingQueueTypeName by remember { mutableStateOf(initialQueueTypeName) }
     LaunchedEffect(initialTab) {
         tab = initialTab
+    }
+    LaunchedEffect(initialQueueRequestId, initialQueueTypeName) {
+        pendingQueueTypeName = initialQueueTypeName
     }
     Scaffold(
         // 刷照片流是全屏沉浸式，隐藏底部导航
@@ -128,6 +136,8 @@ fun AppRoot(initialTab: AppTab = AppTab.HOME) {
                     onOpenTrash = { tab = AppTab.TRASH },
                 )
                 AppTab.ORGANIZE -> FeedScreen(
+                    initialQueueTypeName = pendingQueueTypeName,
+                    onInitialQueueConsumed = { pendingQueueTypeName = null },
                     onExit = { tab = AppTab.HOME },
                     onOpenTrash = { tab = AppTab.TRASH },
                 )

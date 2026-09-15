@@ -24,6 +24,7 @@ import com.example.photoorganizer.data.MediaLibraryRepository
 import com.example.photoorganizer.data.MediaStoreRepository
 import com.example.photoorganizer.data.SettingsRepository
 import com.example.photoorganizer.data.local.AppDatabase
+import com.example.photoorganizer.domain.QueueType
 import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -74,6 +75,7 @@ class ScanWorker(
             Intent(applicationContext, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 putExtra(MainActivity.EXTRA_OPEN_ORGANIZE, true)
+                putExtra(MainActivity.EXTRA_QUEUE_TYPE, QueueType.RECENT_30.name)
             }
         val pendingIntent =
             PendingIntent.getActivity(
@@ -86,7 +88,7 @@ class ScanWorker(
             NotificationCompat.Builder(applicationContext, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_menu_gallery)
                 .setContentTitle("今天轻整理 ${settings.dailyGoal} 张照片")
-                .setContentText("还有 $remaining 张未整理，点开直接进入短队列。")
+                .setContentText("还有 $remaining 张未整理，点开整理最近新增。")
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
