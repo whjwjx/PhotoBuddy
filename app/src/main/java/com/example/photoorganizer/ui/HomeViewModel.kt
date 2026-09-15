@@ -37,6 +37,7 @@ import kotlinx.coroutines.launch
 
 private const val DAY_MS = 24L * 60 * 60 * 1000
 private const val UNDO_VISIBLE_MS = 3_000L
+private const val FEEDBACK_VISIBLE_MS = 2_500L
 
 data class UndoItem(
     val mediaId: Long,
@@ -641,7 +642,7 @@ class HomeViewModel(
                             statuses = statuses,
                             processedCount = (s.processedCount - undoItems.size).coerceAtLeast(0),
                             undo = null,
-                            feedbackMessage = null,
+                            feedbackMessage = "已撤销",
                         ),
                     )
                 val restoredIndex = updated.queueItems.indexOfFirst { it.id == undo.mediaId }
@@ -651,6 +652,7 @@ class HomeViewModel(
                     updated
                 }
             }
+            clearTransientFeedbackAfterDelay("已撤销")
         }
     }
 
@@ -1039,6 +1041,19 @@ class HomeViewModel(
             _uiState.update { state ->
                 if (state.undo?.mediaId == undo.mediaId && state.undo?.createdAt == undo.createdAt) {
                     state.copy(undo = null, feedbackMessage = null)
+                } else {
+                    state
+                }
+            }
+        }
+    }
+
+    private fun clearTransientFeedbackAfterDelay(message: String) {
+        viewModelScope.launch {
+            delay(FEEDBACK_VISIBLE_MS)
+            _uiState.update { state ->
+                if (state.undo == null && state.feedbackMessage == message) {
+                    state.copy(feedbackMessage = null)
                 } else {
                     state
                 }

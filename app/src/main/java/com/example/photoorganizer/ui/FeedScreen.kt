@@ -162,6 +162,7 @@ fun FeedScreen(
             UndoBanner(
                 visible = state.feedbackMessage != null,
                 message = state.feedbackMessage.orEmpty(),
+                canUndo = state.undo != null,
                 onUndo = undoLastAction,
                 modifier =
                     Modifier
@@ -280,6 +281,7 @@ fun FeedScreen(
             UndoBanner(
                 visible = state.feedbackMessage != null,
                 message = state.feedbackMessage.orEmpty(),
+                canUndo = state.undo != null,
                 onUndo = undoLastAction,
                 modifier =
                     Modifier
@@ -948,6 +950,7 @@ private fun TrashTopButton(
 private fun UndoBanner(
     visible: Boolean,
     message: String,
+    canUndo: Boolean,
     onUndo: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -984,8 +987,10 @@ private fun UndoBanner(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        TextButton(onClick = onUndo) {
-            Text("撤销", color = Color.White)
+        if (canUndo) {
+            TextButton(onClick = onUndo) {
+                Text("撤销", color = Color.White)
+            }
         }
     }
 }
@@ -998,6 +1003,8 @@ private fun undoVisual(message: String): UndoVisual =
             UndoVisual(Color(0xFF8E8E93), "已移出当前短队列")
         message.contains("收藏") ->
             UndoVisual(Color(0xFFFFCC00), "已从未整理中移出")
+        message.contains("已撤销") ->
+            UndoVisual(Color(0xFF34C759), "已回到上一步")
         message.contains("相册") || message.contains("已加入") || message.contains("已在") ->
             UndoVisual(Color(0xFF0A84FF), "已加入相册")
         else ->
