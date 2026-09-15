@@ -159,14 +159,20 @@ fun FeedScreen(
                     }
                 }
             val showSimilarComparison = similarCandidates.size > 1
+            val selectedSimilarPosition = similarCandidates.indexOfFirst { it.index == state.currentIndex }
+            val previousSimilarIndex = similarCandidates.getOrNull(selectedSimilarPosition - 1)?.index
+            val nextSimilarIndex = similarCandidates.getOrNull(selectedSimilarPosition + 1)?.index
             FeedPage(
                 asset = asset,
                 dragX = dragX,
                 dragY = dragY,
+                similarMode = showSimilarComparison,
                 onKeep = { vm.act(MediaStatus.KEEP) },
                 onLater = { vm.act(MediaStatus.LATER) },
                 onTrash = { vm.act(MediaStatus.TRASH) },
                 onFavorite = { vm.act(MediaStatus.FAVORITE) },
+                onPreviousSimilar = { previousSimilarIndex?.let { vm.setIndex(it) } },
+                onNextSimilar = { nextSimilarIndex?.let { vm.setIndex(it) } },
                 onDragFeedback = { x, y ->
                     dragX = x
                     dragY = y
@@ -192,14 +198,15 @@ fun FeedScreen(
 
             GestureHints(
                 visible =
-                    !showSimilarComparison &&
-                        abs(dragX) <= SWIPE_HINT_THRESHOLD &&
+                    abs(dragX) <= SWIPE_HINT_THRESHOLD &&
                         abs(dragY) <= SWIPE_HINT_THRESHOLD,
+                similarMode = showSimilarComparison,
                 modifier = Modifier.align(Alignment.Center),
             )
             SwipeFeedback(
                 dragX = dragX,
                 dragY = dragY,
+                similarMode = showSimilarComparison,
                 modifier = Modifier.align(Alignment.Center),
             )
 
@@ -403,17 +410,20 @@ private fun FeedPage(
     asset: MediaAsset,
     dragX: Float,
     dragY: Float,
+    similarMode: Boolean,
     onKeep: () -> Unit,
     onLater: () -> Unit,
     onTrash: () -> Unit,
     onFavorite: () -> Unit,
+    onPreviousSimilar: () -> Unit,
+    onNextSimilar: () -> Unit,
     onDragFeedback: (Float, Float) -> Unit,
 ) {
     Box(
         Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(asset.id) {
+            .pointerInput(asset.id, similarMode) {
                 var totalX = 0f
                 var totalY = 0f
                 detectDragGestures(
@@ -430,6 +440,8 @@ private fun FeedPage(
                     onDragEnd = {
                         val horizontal = abs(totalX) > abs(totalY)
                         when {
+                            horizontal && similarMode && totalX > SWIPE_ACTION_THRESHOLD -> onPreviousSimilar()
+                            horizontal && similarMode && totalX < -SWIPE_ACTION_THRESHOLD -> onNextSimilar()
                             horizontal && totalX > SWIPE_ACTION_THRESHOLD -> onKeep()
                             horizontal && totalX < -SWIPE_ACTION_THRESHOLD -> onLater()
                             !horizontal && totalY < -SWIPE_ACTION_THRESHOLD -> onTrash()
@@ -506,7 +518,7 @@ private fun SimilarComparisonStrip(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "点缩略图对比，下方按钮决定当前候选。",
+                    "左右滑动或点缩略图对比，按钮处理当前候选。",
                     color = Color.White.copy(alpha = 0.72f),
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
@@ -590,6 +602,7 @@ private fun similarCandidatesForCurrent(
 private fun SwipeFeedback(
     dragX: Float,
     dragY: Float,
+    similarMode: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val horizontal = abs(dragX) > abs(dragY)
@@ -599,17 +612,24 @@ private fun SwipeFeedback(
     val armed = distance >= SWIPE_ACTION_THRESHOLD
     val label =
         when {
+            similarMode && horizontal && dragX > 0 -> "上一张"
+            similarMode && horizontal -> "下一张"
             horizontal && dragX > 0 -> "保留"
             horizontal -> "稍后"
             dragY < 0 -> "加入待删除"
             else -> "收藏"
         }
-    val helper = if (armed) "松手执行" else "继续拖动"
+    val helper = if (armed) {
+        if (similarMode && horizontal) "松手切换" else "松手执行"
+    } else {
+        "继续拖动"
+    }
     val color =
         when (label) {
             "加入待删除" -> Color(0xFFE53935)
             "收藏" -> Color(0xFFFFC107)
             "保留" -> Color(0xFF43A047)
+            "上一张", "下一张" -> Color(0xFF0A84FF)
             else -> Color(0xFF42A5F5)
         }
     val decision = DragDecision(label = label, helper = helper, color = color)
@@ -823,6 +843,7 @@ private fun undoVisual(message: String): UndoVisual =
 @Composable
 private fun GestureHints(
     visible: Boolean,
+    similarMode: Boolean,
     modifier: Modifier = Modifier,
 ) {
     if (!visible) return
@@ -833,8 +854,16 @@ private fun GestureHints(
     ) {
         Text("下滑收藏", color = Color.White.copy(alpha = 0.45f), style = MaterialTheme.typography.labelMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(96.dp)) {
-            Text("稍后", color = Color.White.copy(alpha = 0.4f), style = MaterialTheme.typography.labelMedium)
-            Text("保留", color = Color.White.copy(alpha = 0.4f), style = MaterialTheme.typography.labelMedium)
+            Text(
+                if (similarMode) "上一张" else "稍后",
+                color = Color.White.copy(alpha = 0.4f),
+                style = MaterialTheme.typography.labelMedium,
+            )
+            Text(
+                if (similarMode) "下一张" else "保留",
+                color = Color.White.copy(alpha = 0.4f),
+                style = MaterialTheme.typography.labelMedium,
+            )
         }
         Text("上滑待删除", color = Color.White.copy(alpha = 0.45f), style = MaterialTheme.typography.labelMedium)
     }
