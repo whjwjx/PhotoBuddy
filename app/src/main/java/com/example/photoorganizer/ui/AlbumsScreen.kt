@@ -328,13 +328,13 @@ private fun AlbumList(
         modifier =
             modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
-            label = { Text("搜索相册") },
+            placeholder = { Text("搜索相册") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
@@ -350,9 +350,31 @@ private fun AlbumList(
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (state.albums.isEmpty()) {
-                EmptyAlbums()
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EmptyAlbums(Modifier.weight(1f))
+                    CreateAlbumCard(
+                        draftName = draftName,
+                        trimmedDraftName = trimmedDraftName,
+                        hasSameNameAlbum = hasSameNameAlbum,
+                        showStarterAlbums = trimmedDraftName.isEmpty(),
+                        onDraftChange = onDraftChange,
+                        onCreate = onCreate,
+                        onCreateName = onCreateName,
+                    )
+                }
             } else if (visibleAlbums.isEmpty()) {
-                EmptyAlbumSearch(query = query)
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EmptyAlbumSearch(query = query, modifier = Modifier.weight(1f))
+                    CreateAlbumCard(
+                        draftName = draftName,
+                        trimmedDraftName = trimmedDraftName,
+                        hasSameNameAlbum = hasSameNameAlbum,
+                        showStarterAlbums = false,
+                        onDraftChange = onDraftChange,
+                        onCreate = onCreate,
+                        onCreateName = onCreateName,
+                    )
+                }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -377,19 +399,20 @@ private fun AlbumList(
                             onToggleHidden = { onToggleHidden(album.id, album.id !in state.hiddenAlbumIds) },
                         )
                     }
+                    item {
+                        CreateAlbumCard(
+                            draftName = draftName,
+                            trimmedDraftName = trimmedDraftName,
+                            hasSameNameAlbum = hasSameNameAlbum,
+                            showStarterAlbums = false,
+                            onDraftChange = onDraftChange,
+                            onCreate = onCreate,
+                            onCreateName = onCreateName,
+                        )
+                    }
                 }
             }
         }
-
-        CreateAlbumCard(
-            draftName = draftName,
-            trimmedDraftName = trimmedDraftName,
-            hasSameNameAlbum = hasSameNameAlbum,
-            showStarterAlbums = state.albums.isEmpty() && trimmedDraftName.isEmpty(),
-            onDraftChange = onDraftChange,
-            onCreate = onCreate,
-            onCreateName = onCreateName,
-        )
     }
     if (showSystemAlbumPicker) {
         SystemAlbumImportDialog(
@@ -418,17 +441,7 @@ private fun CreateAlbumCard(
     onCreateName: (String) -> Unit,
 ) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                Text("新建整理相册", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "创建后会出现在整理页快捷相册里，不会移动原照片。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -436,11 +449,15 @@ private fun CreateAlbumCard(
                 OutlinedTextField(
                     value = draftName,
                     onValueChange = onDraftChange,
-                    label = { Text("相册名称") },
+                    placeholder = { Text("新建相册") },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                 )
-                Button(onClick = onCreate, enabled = trimmedDraftName.isNotEmpty() && !hasSameNameAlbum) {
+                Button(
+                    onClick = onCreate,
+                    enabled = trimmedDraftName.isNotEmpty() && !hasSameNameAlbum,
+                    shape = RoundedCornerShape(8.dp),
+                ) {
                     Text(if (hasSameNameAlbum) "已存在" else "新建")
                 }
             }
@@ -472,30 +489,35 @@ private fun AlbumManagementSummary(
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("本地相册映射", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("本地相册映射", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "用于刷照片时一键归类；只记录 App 内映射，不创建、移动或删除系统相册。",
+                    "$albumCount 个映射 · $totalClassified 项记录 · $pinnedCount 个置顶 · $hiddenCount 个隐藏",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                AlbumSummaryMetric("映射", albumCount.toString(), Modifier.weight(1f))
-                AlbumSummaryMetric("记录", totalClassified.toString(), Modifier.weight(1f))
-                AlbumSummaryMetric("置顶", pinnedCount.toString(), Modifier.weight(1f))
-                AlbumSummaryMetric("隐藏", hiddenCount.toString(), Modifier.weight(1f))
+                Text(
+                    "只记录 App 内映射，不改系统相册。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             OutlinedButton(
                 onClick = onImportSystemAlbum,
                 enabled = systemAlbumCount > 0,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.height(36.dp),
                 shape = RoundedCornerShape(8.dp),
             ) {
-                Text("导入系统相册映射 · $systemAlbumCount 个可选")
+                Text("导入 · $systemAlbumCount")
             }
         }
     }
@@ -579,23 +601,6 @@ private fun SystemAlbumImportDialog(
 }
 
 @Composable
-private fun AlbumSummaryMetric(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(1.dp),
-    ) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
 private fun StarterAlbumSuggestions(
     onCreateName: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -644,12 +649,12 @@ private fun AlbumRow(
         shape = RoundedCornerShape(8.dp),
     ) {
         Row(
-            Modifier.padding(12.dp),
+            Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            AlbumCover(cover = cover, modifier = Modifier.size(72.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            AlbumCover(cover = cover, modifier = Modifier.size(58.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     album.name,
                     style = MaterialTheme.typography.titleMedium,
@@ -658,20 +663,14 @@ private fun AlbumRow(
                 )
                 Text(
                     buildString {
-                        append("本地映射 · $count 项")
+                        append("$count 项")
+                        if (lastAddedAt > 0) {
+                            append(" · 最近 ${formatDate(lastAddedAt)}")
+                        } else {
+                            append(" · 待归类")
+                        }
                         if (pinned) append(" · 已置顶")
                         if (hidden) append(" · 快捷区隐藏")
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    if (lastAddedAt > 0) {
-                        "最近归类 ${formatDate(lastAddedAt)}"
-                    } else {
-                        "不影响系统相册；整理页点击即可归类"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -807,8 +806,8 @@ private fun AlbumDetail(
         } else {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
                 items(items, key = { it.id }) { asset ->
@@ -848,22 +847,13 @@ private fun AlbumMediaTile(
                 ),
         shape = shape,
     ) {
-        Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.82f)) {
-            Column(Modifier.fillMaxSize()) {
-                AsyncImage(
-                    model = asset.uri,
-                    contentDescription = asset.displayName,
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    contentScale = ContentScale.Crop,
-                )
-                Text(
-                    asset.displayName,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+        Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
+            AsyncImage(
+                model = asset.uri,
+                contentDescription = asset.displayName,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
             if (selected) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)))
             }
@@ -970,9 +960,12 @@ private fun AlbumMediaPreviewDialog(
 }
 
 @Composable
-private fun EmptyAlbumSearch(query: String) {
+private fun EmptyAlbumSearch(
+    query: String,
+    modifier: Modifier = Modifier,
+) {
     Column(
-        Modifier.fillMaxSize().padding(24.dp),
+        modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -987,9 +980,11 @@ private fun EmptyAlbumSearch(query: String) {
 }
 
 @Composable
-private fun EmptyAlbums() {
+private fun EmptyAlbums(
+    modifier: Modifier = Modifier,
+) {
     Column(
-        Modifier.fillMaxSize().padding(24.dp),
+        modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
