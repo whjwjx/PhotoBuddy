@@ -291,8 +291,8 @@ private fun HomeEntryGrid(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             HomeEntryCard(
                 label = "Continue",
-                title = primaryQueue?.displayName ?: "继续整理",
-                detail = primaryQueue?.let { "${it.items.size} 项" } ?: "暂无未整理",
+                title = "继续整理",
+                detail = continueEntryDetail(primaryQueue),
                 icon = Icons.Default.AutoAwesome,
                 enabled = primaryQueue?.items?.isNotEmpty() == true,
                 modifier = Modifier.weight(1f),
@@ -311,8 +311,8 @@ private fun HomeEntryGrid(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             HomeEntryCard(
                 label = "Monthly",
-                title = monthQueue?.title?.takeIf { it.isNotBlank() } ?: "按月份",
-                detail = queueEntryDetail(monthQueue, "没有待整理月份"),
+                title = "按月份整理",
+                detail = queueEntryDetail(monthQueue, "没有待整理月份", fallbackTitle = "未知月份"),
                 icon = Icons.Default.Today,
                 enabled = monthQueue?.items?.isNotEmpty() == true,
                 modifier = Modifier.weight(1f),
@@ -320,12 +320,12 @@ private fun HomeEntryGrid(
             )
             HomeEntryCard(
                 label = "Albums",
-                title = albumQueue?.title?.takeIf { it.isNotBlank() } ?: "按相册",
+                title = "按相册整理",
                 detail =
                     if (albumQueue?.items?.isNotEmpty() == true) {
-                        "${albumQueue.items.size} 项待整理"
+                        queueEntryDetail(albumQueue, "管理本地映射", fallbackTitle = "未知相册")
                     } else {
-                        "管理相册"
+                        "管理本地映射"
                     },
                 icon = Icons.Default.PhotoAlbum,
                 enabled = true,
@@ -426,11 +426,21 @@ private fun HomeEntryCard(
 private fun queueEntryDetail(
     queue: MediaQueue?,
     emptyText: String = "暂无待整理",
+    fallbackTitle: String? = null,
 ): String =
     if (queue?.items?.isNotEmpty() == true) {
-        "${queue.items.size} 项待整理"
+        fallbackTitle?.let { title ->
+            "${queue.title.ifBlank { title }} · ${queue.items.size} 项待整理"
+        } ?: "${queue.items.size} 项待整理"
     } else {
         emptyText
+    }
+
+private fun continueEntryDetail(queue: MediaQueue?): String =
+    if (queue?.items?.isNotEmpty() == true) {
+        "${queue.displayName} · ${queue.items.size} 项待整理"
+    } else {
+        "暂无未整理"
     }
 
 @Composable
