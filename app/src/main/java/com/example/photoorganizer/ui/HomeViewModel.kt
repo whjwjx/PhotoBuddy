@@ -744,6 +744,76 @@ class HomeViewModel(
         }
     }
 
+    /**
+     * 将系统图库里的一个来源相册导入为 App 内整理相册。
+     * 这里只建立本地映射并标记未整理项为已归类，不移动、不重命名系统文件。
+     */
+    fun importSystemAlbum(
+        bucketKey: String,
+        bucketName: String,
+    ) {
+        val name = bucketName.ifBlank { "系统相册" }.trim()
+        if (bucketKey.isBlank()) return
+        val state = _uiState.value
+        val blockedStatuses = setOf(MediaStatus.TRASH.value, MediaStatus.DELETE.value)
+        val statusById = state.statusById
+        val assets =
+            state.allAssets.filter { asset ->
+                asset.bucketFilterKey() == bucketKey &&
+                    statusById[asset.id] !in blockedStatuses
+            }
+        if (assets.isEmpty()) return
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val albumId =
+                albumWithName(name)?.id
+                    ?: albumDao.insertAlbum(AlbumEntity(name = name, createdAt = now))
+            var mappedCount = 0
+            var organizedCount = 0
+            assets.forEach { asset ->
+                if (albumDao.itemCount(albumId, asset.id) == 0) {
+                    mappedCount += 1
+                }
+                albumDao.addItem(AlbumItemEntity(albumId = albumId, mediaId = asset.id, addedAt = now))
+                val before = dao.get(asset.id)?.status.orEmpty()
+                if (before.isBlank() || before == MediaStatus.LATER.value) {
+                    dao.upsert(toEntity(asset, MediaStatus.ALBUM))
+                    organizedCount += 1
+                    logDao.insert(
+                        UserActionLogEntity(
+                            mediaId = asset.id,
+                            mediaName = asset.displayName,
+                            mediaType = asset.mediaType.name,
+                            action = MediaStatus.ALBUM.value,
+                            source = "导入系统相册 · $name",
+                            beforeState = before,
+                            afterState = MediaStatus.ALBUM.value,
+                            freedBytes = 0L,
+                            createdAt = now,
+                        ),
+                    )
+                }
+            }
+            val ids = albumDao.getItems(albumId).map { it.mediaId }
+            val message =
+                if (organizedCount > 0) {
+                    "已导入「$name」：$mappedCount 项，$organizedCount 张标记已归类"
+                } else {
+                    "已导入「$name」：$mappedCount 项"
+                }
+            _uiState.update { s ->
+                recompute(
+                    s.copy(
+                        openAlbumId = albumId,
+                        openAlbumMediaIds = ids,
+                        feedbackMessage = message,
+                    ),
+                )
+            }
+            clearTransientFeedbackAfterDelay(message)
+        }
+    }
+
     /** 新建相册后立刻把当前卡片归入该相册，保持刷卡流不中断。 */
     fun createAlbumAndAddCurrent(name: String) {
         val asset = _uiState.value.current ?: return

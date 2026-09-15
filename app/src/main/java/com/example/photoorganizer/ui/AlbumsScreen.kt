@@ -59,6 +59,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +72,12 @@ import com.example.photoorganizer.data.MediaAsset
 import com.example.photoorganizer.data.local.AlbumEntity
 
 private val STARTER_ALBUM_NAMES = listOf("家人", "朋友", "旅行", "资料", "美食", "截图")
+
+private data class SystemAlbumOption(
+    val key: String,
+    val name: String,
+    val count: Int,
+)
 
 /** 应用内相册页：负责查看、重命名、删除相册，以及从相册中批量移除媒体。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -90,6 +97,19 @@ fun AlbumsScreen() {
         openAlbum
             ?.let { album -> state.openAlbumMediaIds.mapNotNull { id -> state.allAssets.firstOrNull { it.id == id } } }
             .orEmpty()
+    val systemAlbumOptions =
+        remember(state.allAssets) {
+            state.allAssets
+                .groupBy { asset -> asset.bucketId.ifBlank { asset.bucketName.ifBlank { "unknown" } } }
+                .map { (key, assets) ->
+                    SystemAlbumOption(
+                        key = key,
+                        name = assets.firstOrNull()?.bucketName?.ifBlank { "未知相册" } ?: "未知相册",
+                        count = assets.size,
+                    )
+                }
+                .sortedWith(compareByDescending<SystemAlbumOption> { it.count }.thenBy { it.name })
+        }
 
     LaunchedEffect(openAlbum?.id, openItems.map { it.id }) {
         selectedIds = selectedIds.intersect(openItems.map { it.id }.toSet())
@@ -125,6 +145,7 @@ fun AlbumsScreen() {
                 state = state,
                 draftName = name,
                 query = query,
+                systemAlbumOptions = systemAlbumOptions,
                 onDraftChange = { name = it },
                 onQueryChange = { query = it },
                 onCreate = {
@@ -141,6 +162,7 @@ fun AlbumsScreen() {
                 onMerge = { mergeTarget = it },
                 onTogglePin = { albumId, pinned -> vm.setAlbumPinned(albumId, pinned) },
                 onToggleHidden = { albumId, hidden -> vm.setAlbumHidden(albumId, hidden) },
+                onImportSystemAlbum = { option -> vm.importSystemAlbum(option.key, option.name) },
                 modifier = Modifier.padding(padding),
             )
         } else {
@@ -236,6 +258,7 @@ private fun AlbumList(
     state: HomeUiState,
     draftName: String,
     query: String,
+    systemAlbumOptions: List<SystemAlbumOption>,
     onDraftChange: (String) -> Unit,
     onQueryChange: (String) -> Unit,
     onCreate: () -> Unit,
@@ -246,8 +269,10 @@ private fun AlbumList(
     onMerge: (AlbumEntity) -> Unit,
     onTogglePin: (Long, Boolean) -> Unit,
     onToggleHidden: (Long, Boolean) -> Unit,
+    onImportSystemAlbum: (SystemAlbumOption) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showSystemAlbumPicker by remember { mutableStateOf(false) }
     val trimmedDraftName = draftName.trim()
     val hasSameNameAlbum =
         trimmedDraftName.isNotEmpty() &&
@@ -295,6 +320,8 @@ private fun AlbumList(
             totalClassified = totalClassified,
             pinnedCount = pinnedCount,
             hiddenCount = hiddenCount,
+            systemAlbumCount = systemAlbumOptions.size,
+            onImportSystemAlbum = { showSystemAlbumPicker = true },
         )
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -338,6 +365,16 @@ private fun AlbumList(
             onDraftChange = onDraftChange,
             onCreate = onCreate,
             onCreateName = onCreateName,
+        )
+    }
+    if (showSystemAlbumPicker) {
+        SystemAlbumImportDialog(
+            options = systemAlbumOptions,
+            onImport = { option ->
+                onImportSystemAlbum(option)
+                showSystemAlbumPicker = false
+            },
+            onDismiss = { showSystemAlbumPicker = false },
         )
     }
 }
@@ -399,6 +436,8 @@ private fun AlbumManagementSummary(
     totalClassified: Int,
     pinnedCount: Int,
     hiddenCount: Int,
+    systemAlbumCount: Int,
+    onImportSystemAlbum: () -> Unit,
 ) {
     Card(
         Modifier.fillMaxWidth(),
@@ -422,8 +461,77 @@ private fun AlbumManagementSummary(
                 AlbumSummaryMetric("置顶", pinnedCount.toString(), Modifier.weight(1f))
                 AlbumSummaryMetric("隐藏", hiddenCount.toString(), Modifier.weight(1f))
             }
+            OutlinedButton(
+                onClick = onImportSystemAlbum,
+                enabled = systemAlbumCount > 0,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Text("添加已有系统相册 · $systemAlbumCount 个可选")
+            }
         }
     }
+}
+
+@Composable
+private fun SystemAlbumImportDialog(
+    options: List<SystemAlbumOption>,
+    onImport: (SystemAlbumOption) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("添加已有系统相册") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "会创建同名的 App 内整理相册，并导入其中照片的归类记录；不会移动或修改系统相册文件。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (options.isEmpty()) {
+                    Text("没有可导入的系统相册。", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.height(320.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        items(options, key = { it.key }) { option ->
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { onImport(option) }
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        option.name,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        "${option.count} 项 · 导入为 App 内相册",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                Text("导入", color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }
 
 @Composable
