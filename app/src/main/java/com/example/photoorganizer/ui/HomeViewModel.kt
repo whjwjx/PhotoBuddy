@@ -415,10 +415,13 @@ class HomeViewModel(
                     it.copy(
                         pendingDelete = sender,
                         trashDeleteIdsInFlight = assets.map { asset -> asset.id }.toSet(),
+                        feedbackMessage = "等待系统确认 ${assets.size} 项删除",
+                        error = null,
                     )
                 }
             }
         } else {
+            _uiState.update { it.copy(feedbackMessage = "正在删除 ${assets.size} 项", error = null) }
             viewModelScope.launch {
                 val okIds = assets.filter { coordinator.deleteToTrash(it) }.map { it.id }.toSet()
                 if (okIds.isEmpty()) {
@@ -438,7 +441,13 @@ class HomeViewModel(
     }
 
     fun clearPendingDelete() {
-        _uiState.update { it.copy(pendingDelete = null, trashDeleteIdsInFlight = emptySet()) }
+        _uiState.update {
+            it.copy(
+                pendingDelete = null,
+                trashDeleteIdsInFlight = emptySet(),
+                feedbackMessage = "已取消删除，照片仍保留在待删除复核页",
+            )
+        }
     }
 
     fun clearError() {
@@ -486,11 +495,18 @@ class HomeViewModel(
             _uiState.update { s ->
                 val updatedStatuses =
                     s.statuses.filterNot { it.localAssetId in ids } + restoredStatuses
+                val restoredCount = ids.count { it in byId }
                 recompute(
                     s.copy(
                         statuses = updatedStatuses,
                         undo = null,
-                        feedbackMessage = null,
+                        feedbackMessage =
+                            if (targetStatus == MediaStatus.KEEP) {
+                                "已标记保留 $restoredCount 项"
+                            } else {
+                                "已恢复 $restoredCount 项到未整理"
+                            },
+                        error = null,
                     ),
                 )
             }
@@ -1008,6 +1024,14 @@ class HomeViewModel(
                     pendingDelete = null,
                     trashDeleteIdsInFlight = emptySet(),
                     undo = null,
+                    feedbackMessage =
+                        if (failedIds.isNotEmpty()) {
+                            "已处理 ${deletedIds.size} 项，${failedIds.size} 项仍待复核"
+                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            "已移入最近删除 ${deletedIds.size} 项"
+                        } else {
+                            "已删除 ${deletedIds.size} 项"
+                        },
                     error =
                         if (failedIds.isNotEmpty()) {
                             "${failedIds.size} 张照片未被系统移除，已继续保留在待删除复核页。"

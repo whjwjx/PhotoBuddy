@@ -36,6 +36,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -220,6 +221,24 @@ fun TrashScreen(onExit: () -> Unit) {
                         }
                     }
                 }
+                val pendingCount = state.trashDeleteIdsInFlight.size
+                if (pendingCount > 0) {
+                    Spacer(Modifier.height(10.dp))
+                    TrashStatusCard(
+                        title = "等待系统处理 $pendingCount 项",
+                        body = "系统确认完成后会重新扫描并校验结果，未成功移除的照片会继续留在这里。",
+                        inProgress = true,
+                    )
+                } else {
+                    state.feedbackMessage?.let { message ->
+                        Spacer(Modifier.height(10.dp))
+                        TrashStatusCard(
+                            title = message,
+                            body = "你可以继续复核待删除照片，或返回整理页继续刷卡。",
+                            onDismiss = { vm.clearFeedback() },
+                        )
+                    }
+                }
                 Spacer(Modifier.height(10.dp))
                 SourceFilterRow(
                     options = sourceOptions,
@@ -300,6 +319,58 @@ fun TrashScreen(onExit: () -> Unit) {
             },
             onDismiss = { pendingDeleteIds = emptySet() },
         )
+    }
+}
+
+@Composable
+private fun TrashStatusCard(
+    title: String,
+    body: String,
+    inProgress: Boolean = false,
+    onDismiss: (() -> Unit)? = null,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+            ),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (inProgress) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            } else {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(18.dp)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(Modifier.size(7.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
+                }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                Text(
+                    body,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            onDismiss?.let {
+                TextButton(onClick = it) {
+                    Text("知道了")
+                }
+            }
+        }
     }
 }
 
