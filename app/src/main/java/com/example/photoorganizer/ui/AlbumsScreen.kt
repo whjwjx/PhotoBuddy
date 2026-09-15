@@ -268,12 +268,16 @@ private fun AlbumList(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    AlbumModePill("当前类型", "App 标签", modifier = Modifier.weight(1f))
+                    AlbumModePill("系统同步", "暂未开启", modifier = Modifier.weight(1f))
+                }
             }
         }
 
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("新建相册", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("新建 App 标签", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -281,12 +285,12 @@ private fun AlbumList(
                     OutlinedTextField(
                         value = draftName,
                         onValueChange = onDraftChange,
-                        label = { Text("相册名称") },
+                        label = { Text("标签名称") },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
                     Button(onClick = onCreate, enabled = trimmedDraftName.isNotEmpty() && !hasSameNameAlbum) {
-                        Text(if (hasSameNameAlbum) "已存在" else "新建")
+                        Text(if (hasSameNameAlbum) "已存在" else "创建")
                     }
                 }
                 if (hasSameNameAlbum) {
@@ -452,7 +456,7 @@ private fun AlbumRow(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("映射说明") },
+                        text = { Text("同步说明") },
                         onClick = {
                             menuExpanded = false
                             onShowMapping()
@@ -468,6 +472,33 @@ private fun AlbumRow(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AlbumModePill(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .background(
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+                    RoundedCornerShape(8.dp),
+                )
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(value, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -891,7 +922,7 @@ private fun AlbumMappingDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("相册映射说明") },
+        title = { Text("相册同步说明") },
         text = {
             Text(
                 "「${album.name}」目前是 App 内标签。加入、移出或删除这个相册，只会改变本 App 的归类记录，" +
