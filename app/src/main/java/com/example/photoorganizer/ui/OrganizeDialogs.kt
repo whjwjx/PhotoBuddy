@@ -20,6 +20,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -64,6 +65,7 @@ internal fun QueueFilterSheet(
     state: HomeUiState,
     onFilterType: (MediaType?) -> Unit,
     onFilterBucket: (String?) -> Unit,
+    onClearFilters: () -> Unit,
     onSelectQueue: (MediaQueue) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -92,6 +94,8 @@ internal fun QueueFilterSheet(
     val currentTotal = state.queueItems.size
     val currentDone = (currentTotal - state.remaining).coerceIn(0, currentTotal)
     val currentProgress = if (currentTotal == 0) 1f else currentDone.toFloat() / currentTotal
+    val scopeLabel = queueScopeLabel(state)
+    val hasActiveFilters = state.filterType != null || state.filterBucket != null
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -118,6 +122,25 @@ internal fun QueueFilterSheet(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            "范围：$scopeLabel",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (hasActiveFilters) {
+                            TextButton(onClick = onClearFilters) {
+                                Text("清除筛选")
+                            }
+                        }
+                    }
                     LinearProgressIndicator(
                         progress = { currentProgress },
                         modifier = Modifier
@@ -212,6 +235,27 @@ private data class BucketFilterOption(
     val name: String,
     val count: Int,
 )
+
+private fun queueScopeLabel(state: HomeUiState): String =
+    buildList {
+        when (state.filterType) {
+            MediaType.IMAGE -> add("图片")
+            MediaType.VIDEO -> add("视频")
+            null -> Unit
+        }
+        if (state.filterBucket != null) {
+            val bucketName =
+                state.allAssets
+                    .firstOrNull { asset ->
+                        val bucketKey = asset.bucketId.ifBlank { asset.bucketName.ifBlank { "unknown" } }
+                        bucketKey == state.filterBucket
+                    }
+                    ?.bucketName
+                    ?.ifBlank { null }
+                    ?: "未知相册"
+            add(bucketName)
+        }
+    }.joinToString(" · ").ifBlank { "全部照片和视频" }
 
 @Composable
 private fun QueueSheetSectionTitle(

@@ -345,6 +345,7 @@ fun FeedScreen(
             state = state,
             onFilterType = { vm.setFilter(it, state.filterBucket) },
             onFilterBucket = { vm.setFilter(state.filterType, it) },
+            onClearFilters = { vm.setFilter(null, null) },
             onSelectQueue = {
                 vm.selectQueue(it)
                 showQueue = false
