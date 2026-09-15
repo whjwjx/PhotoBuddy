@@ -23,5 +23,4 @@ enum class MediaStatus(val value: String, val label: String) {
     DELETE("delete", "已删除"),
     LATER("later", "稍后"),
     FAVORITE("favorite", "收藏"),
-    PERMANENT("permanent", "永久保留"),
 }

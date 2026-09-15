@@ -930,7 +930,6 @@ class HomeViewModel(
             MediaStatus.LATER -> "已标记稍后"
             MediaStatus.FAVORITE -> "已收藏"
             MediaStatus.DELETE -> "已删除"
-            MediaStatus.PERMANENT -> "已永久保留"
         }
 
     private suspend fun finishTrashDelete(ids: Set<Long>) {
