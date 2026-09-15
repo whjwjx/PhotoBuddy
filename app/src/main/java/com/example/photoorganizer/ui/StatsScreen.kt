@@ -364,7 +364,7 @@ private fun QueueProgressRow(
                         if (queue.items.isNotEmpty()) {
                             queueProgressText(item)
                         } else {
-                            "这个队列已整理完"
+                            emptyQueueProgressText(queue)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -379,6 +379,13 @@ private fun QueueProgressRow(
         }
     }
 }
+
+private fun emptyQueueProgressText(queue: MediaQueue): String =
+    when (queue.type) {
+        QueueType.ON_THIS_DAY -> "今天暂无待整理回忆"
+        QueueType.MONTH -> "没有待整理月份"
+        else -> "没有待处理照片"
+    }
 
 private fun queueProgressText(item: QueueProgressItem): String {
     val total = item.totalCount
