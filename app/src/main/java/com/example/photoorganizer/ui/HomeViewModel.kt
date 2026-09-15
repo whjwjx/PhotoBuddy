@@ -28,6 +28,7 @@ import com.example.photoorganizer.domain.MediaQueue
 import com.example.photoorganizer.domain.QueueEngine
 import com.example.photoorganizer.domain.QueueType
 import com.example.photoorganizer.worker.ScanWorker
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +36,44 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 private const val DAY_MS = 24L * 60 * 60 * 1000
+private const val UNDO_VISIBLE_MS = 3_000L
+private const val FEEDBACK_VISIBLE_MS = 2_500L
+
+data class UndoItem(
+    val mediaId: Long,
+    val mediaName: String,
+    val mediaType: String,
+    val beforeStatus: String?,
+    val albumId: Long? = null,
+    val albumItemAdded: Boolean = false,
+)
+
+data class UndoState(
+    val mediaId: Long,
+    val mediaName: String,
+    val mediaType: String,
+    val beforeStatus: String?,
+    val albumId: Long? = null,
+    val albumItemAdded: Boolean = false,
+    val items: List<UndoItem> = emptyList(),
+    val message: String,
+    val createdAt: Long,
+) {
+    val undoItems: List<UndoItem>
+        get() =
+            items.ifEmpty {
+                listOf(
+                    UndoItem(
+                        mediaId = mediaId,
+                        mediaName = mediaName,
+                        mediaType = mediaType,
+                        beforeStatus = beforeStatus,
+                        albumId = albumId,
+                        albumItemAdded = albumItemAdded,
+                    ),
+                )
+            }
+}
 
 data class HomeUiState(
     val isScanning: Boolean = false,
@@ -54,19 +93,21 @@ data class HomeUiState(
     val processedCount: Int = 0,
     val freedBytes: Long = 0,
     val error: String? = null,
-    /** API 30+ 待启动的系统删除确认 IntentSender（单个）。 */
+    /** API 30+ 待启动的系统删除确认 IntentSender（待删除页批量确认）。 */
     val pendingDelete: IntentSender? = null,
+    val trashDeleteIdsInFlight: Set<Long> = emptySet(),
     val settings: OrganizeSettings = OrganizeSettings(),
     val albums: List<AlbumEntity> = emptyList(),
     val albumCounts: Map<Long, Int> = emptyMap(),
+    val albumMediaIds: Map<Long, List<Long>> = emptyMap(),
+    val albumLastAddedAt: Map<Long, Long> = emptyMap(),
+    val pinnedAlbumIds: Set<Long> = emptySet(),
+    val hiddenAlbumIds: Set<Long> = emptySet(),
+    val albumOrderIds: List<Long> = emptyList(),
+    val feedActionBarExpanded: Boolean = false,
+    val feedGestureGuideSeen: Boolean = false,
     val openAlbumId: Long? = null,
     val openAlbumMediaIds: List<Long> = emptyList(),
-    val showBatch: Boolean = false,
-    /** 批量确认候选（已按安全策略剔除高风险项）。 */
-    val batchCandidates: List<MediaAsset> = emptyList(),
-    val selectedIds: Set<Long> = emptySet(),
-    val batchIdsInFlight: Set<Long> = emptySet(),
-    val pendingBatchDelete: IntentSender? = null,
     // --- P4：增量扫描 / 每日整理任务 ---
     val lastScanMs: Long = 0L,
     val lastSyncAdded: Int = 0,
@@ -81,12 +122,22 @@ data class HomeUiState(
     val deletedLogs: List<UserActionLogEntity> = emptyList(),
     val pendingRestore: IntentSender? = null,
     val restoringLogId: Long? = null,
+    val undo: UndoState? = null,
+    val feedbackMessage: String? = null,
 ) {
     val current: MediaAsset? get() = queueItems.getOrNull(currentIndex)
     val remaining: Int get() = (queueItems.size - currentIndex).coerceAtLeast(0)
-
-    /** 安全策略命中的高风险项（收藏 / 最近拍摄），默认不进入批量删除。 */
-    val highRiskCount: Int get() = queueItems.count { isProtected(it) }
+    val statusById: Map<Long, String> get() = statuses.associate { it.localAssetId to it.status }
+    val unprocessedCount: Int get() = allAssets.count { it.id !in statusById }
+    val trashItems: List<MediaAsset>
+        get() = allAssets.filter { statusById[it.id] == MediaStatus.TRASH.value }
+    val trashCount: Int get() = trashItems.size
+    val trashBytes: Long get() = trashItems.sumOf { it.size }
+    val organizedCount: Int
+        get() =
+            statuses.count {
+                it.status != MediaStatus.TRASH.value && it.status != MediaStatus.DELETE.value
+            }
 
     /** 今日任务是否完成。 */
     val dailyDone: Boolean get() = daily.count >= settings.dailyGoal && settings.dailyGoal > 0
@@ -94,16 +145,6 @@ data class HomeUiState(
     /** 当前队列来源描述，写入操作日志（PRD 9.5 source）。 */
     val queueSource: String
         get() = queueType.label + (if (queueTitle.isNotEmpty()) " · $queueTitle" else "")
-
-    fun isProtected(asset: MediaAsset): Boolean =
-        (settings.protectFavorite && asset.isFavorite) ||
-            (
-                settings.protectRecentDays > 0 &&
-                    asset.capturedAt > 0 &&
-                    asset.capturedAt > System.currentTimeMillis() - settings.protectRecentDays * DAY_MS
-            )
-
-    val selectedBytes: Long get() = batchCandidates.filter { it.id in selectedIds }.sumOf { it.size }
 }
 
 class HomeViewModel(
@@ -145,10 +186,43 @@ class HomeViewModel(
             }
         }
         viewModelScope.launch {
+            albumDao.observeAllItems().collect { items ->
+                _uiState.update {
+                    it.copy(
+                        albumMediaIds = items.groupBy { item -> item.albumId }.mapValues { entry ->
+                            entry.value.map { item -> item.mediaId }
+                        },
+                        albumLastAddedAt = items.groupBy { item -> item.albumId }.mapValues { entry ->
+                            entry.value.maxOfOrNull { item -> item.addedAt } ?: 0L
+                        },
+                    )
+                }
+            }
+        }
+        viewModelScope.launch {
             settingsRepo.settings.collect { s -> _uiState.update { it.copy(settings = s) } }
         }
         viewModelScope.launch {
             settingsRepo.daily.collect { d -> _uiState.update { it.copy(daily = d) } }
+        }
+        viewModelScope.launch {
+            settingsRepo.pinnedAlbumIds.collect { ids -> _uiState.update { it.copy(pinnedAlbumIds = ids) } }
+        }
+        viewModelScope.launch {
+            settingsRepo.hiddenAlbumIds.collect { ids -> _uiState.update { it.copy(hiddenAlbumIds = ids) } }
+        }
+        viewModelScope.launch {
+            settingsRepo.albumOrderIds.collect { ids -> _uiState.update { it.copy(albumOrderIds = ids) } }
+        }
+        viewModelScope.launch {
+            settingsRepo.feedActionBarExpanded.collect { expanded ->
+                _uiState.update { it.copy(feedActionBarExpanded = expanded) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepo.feedGestureGuideSeen.collect { seen ->
+                _uiState.update { it.copy(feedGestureGuideSeen = seen) }
+            }
         }
         viewModelScope.launch {
             logDao.observeRecent(20).collect { list -> _uiState.update { it.copy(recentLogs = list) } }
@@ -160,15 +234,7 @@ class HomeViewModel(
         // Android 14+「部分照片访问」检测：这种情况 App 只能看到用户勾选的少量照片，
         // 若不给提示，用户会误以为扫描坏了（PRD 8.2.1 要求覆盖该场景）。
         _uiState.update {
-            it.copy(
-                partialAccess =
-                    ContextCompat.checkSelfPermission(app, Manifest.permission.READ_MEDIA_IMAGES) ==
-                        PackageManager.PERMISSION_GRANTED &&
-                        ContextCompat.checkSelfPermission(
-                            app,
-                            Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
-                        ) == PackageManager.PERMISSION_GRANTED,
-            )
+            it.copy(partialAccess = hasPartialMediaAccess(app))
         }
 
         // 后台增量扫描：首次为空则全量，否则增量
@@ -232,7 +298,8 @@ class HomeViewModel(
     /** 刷照片流滑动到某一页时同步索引，保证操作作用于当前可见的卡片。 */
     fun setIndex(index: Int) {
         _uiState.update { s ->
-            if (s.currentIndex == index) s else s.copy(currentIndex = index.coerceIn(0, s.queueItems.size))
+            val safeIndex = if (s.queueItems.isEmpty()) 0 else index.coerceIn(0, s.queueItems.lastIndex)
+            if (s.currentIndex == safeIndex) s else s.copy(currentIndex = safeIndex)
         }
     }
 
@@ -248,53 +315,392 @@ class HomeViewModel(
         }
     }
 
-    /** 用户对当前卡片的决策（PRD 4.2 / 4.5）。删除走二次确认，见 [requestDelete]。 */
-    fun act(status: MediaStatus) {
-        if (status == MediaStatus.DELETE) {
-            requestDelete()
-            return
+    fun selectQueueType(queueTypeName: String) {
+        val requestedType = QueueType.values().firstOrNull { it.name == queueTypeName } ?: return
+        _uiState.update { s ->
+            val picked =
+                s.queues.firstOrNull { it.type == requestedType && it.items.isNotEmpty() }
+                    ?: s.queues.firstOrNull { it.type == QueueType.RANDOM && it.items.isNotEmpty() }
+                    ?: s.queues.firstOrNull { it.type == QueueType.UNPROCESSED && it.items.isNotEmpty() }
+                    ?: s.queues.firstOrNull { it.items.isNotEmpty() }
+                    ?: s.queues.firstOrNull { it.type == requestedType }
+                    ?: return@update s
+            recompute(
+                s.copy(
+                    queueType = picked.type,
+                    queueTitle = picked.title,
+                    currentIndex = 0,
+                ),
+            )
         }
+    }
+
+    /** 从系统相册来源启动整理，复用 Slidebox 的 Album Organization 入口。 */
+    fun selectSystemAlbumQueue(
+        bucketKey: String,
+        bucketName: String,
+    ) {
+        if (bucketKey.isBlank()) return
+        val title = bucketName.ifBlank { "未知相册" }
+        _uiState.update { s ->
+            recompute(
+                s.copy(
+                    filterType = null,
+                    filterBucket = bucketKey,
+                    queueType = QueueType.ALBUM,
+                    queueTitle = title,
+                    currentIndex = 0,
+                    feedbackMessage = null,
+                ),
+            )
+        }
+    }
+
+    /** 用户对当前卡片的决策。删除在 Slidebox 模型里只进入 App 内待删除区。 */
+    fun act(status: MediaStatus) {
+        val nextStatus = if (status == MediaStatus.DELETE) MediaStatus.TRASH else status
         val asset = _uiState.value.current ?: return
-        viewModelScope.launch { finishAction(asset, status) }
+        viewModelScope.launch { finishAction(asset, nextStatus, actionMessage(nextStatus)) }
+    }
+
+    /** 下拉收藏支持二次触发取消 App 内收藏，贴近 Slidebox 的轻量切换手感。 */
+    fun toggleFavorite() {
+        val state = _uiState.value
+        val asset = state.current ?: return
+        val isAppFavorite = state.statusById[asset.id] == MediaStatus.FAVORITE.value
+        val nextStatus = if (isAppFavorite) MediaStatus.KEEP else MediaStatus.FAVORITE
+        val message = if (isAppFavorite) "已取消收藏" else actionMessage(MediaStatus.FAVORITE)
+        viewModelScope.launch { finishAction(asset, nextStatus, message) }
     }
 
     /**
-     * 删除入口（App 自己的确认弹窗之后调用）。
-     * API 30+：发起系统删除确认（MediaStore.createDeleteRequest），由系统完成删除；
-     * API 29-：直接删除。
+     * 兼容旧入口：主整理流里的删除只标记为待删除，不直接请求系统删除。
      */
     fun requestDelete() {
-        val asset = _uiState.value.current ?: return
+        act(MediaStatus.TRASH)
+    }
+
+    fun deferCurrentSimilarGroup() {
+        val s = _uiState.value
+        val current = s.current ?: return
+        if (s.queueType != QueueType.SIMILAR) return
+        val targets = s.queueItems.filter { QueueEngine.isSimilarGroupPeer(current, it) }
+        if (targets.isEmpty()) return
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val undoItems =
+                targets.map { asset ->
+                    UndoItem(
+                        mediaId = asset.id,
+                        mediaName = asset.displayName,
+                        mediaType = asset.mediaType.name,
+                        beforeStatus = dao.get(asset.id)?.status.orEmpty().ifEmpty { null },
+                    )
+                }
+            val undo =
+                UndoState(
+                    mediaId = current.id,
+                    mediaName = "${targets.size} 张相似照片",
+                    mediaType = current.mediaType.name,
+                    beforeStatus = null,
+                    items = undoItems,
+                    message = "本组已标记稍后",
+                    createdAt = now,
+                )
+            _uiState.update { it.copy(undo = undo, feedbackMessage = undo.message) }
+            targets.forEach { asset ->
+                val before = dao.get(asset.id)?.status.orEmpty()
+                dao.upsert(toEntity(asset, MediaStatus.LATER))
+                logDao.insert(
+                    UserActionLogEntity(
+                        mediaId = asset.id,
+                        mediaName = asset.displayName,
+                        mediaType = asset.mediaType.name,
+                        action = MediaStatus.LATER.value,
+                        source = s.queueSource,
+                        beforeState = before,
+                        afterState = MediaStatus.LATER.value,
+                        freedBytes = 0L,
+                        createdAt = now,
+                    ),
+                )
+            }
+            settingsRepo.addProcessed(targets.size)
+            clearFeedbackAfterDelay(undo)
+            _uiState.update { state ->
+                val targetIds = targets.map { it.id }.toSet()
+                val updatedStatuses =
+                    state.statuses.filterNot { it.localAssetId in targetIds } +
+                        targets.map { toEntity(it, MediaStatus.LATER) }
+                recompute(
+                    state.copy(
+                        statuses = updatedStatuses,
+                        processedCount = state.processedCount + targets.size,
+                        undo = undo,
+                        feedbackMessage = undo.message,
+                    ),
+                )
+            }
+        }
+    }
+
+    /** 相似照片队列的一步决策：保留当前候选，其余只进入待删除复核页。 */
+    fun keepCurrentSimilarAndTrashPeers() {
+        val s = _uiState.value
+        val current = s.current ?: return
+        if (s.queueType != QueueType.SIMILAR) return
+        val targets = s.queueItems.filter { QueueEngine.isSimilarGroupPeer(current, it) }
+        if (targets.size < 2) return
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val targetIds = targets.map { it.id }.toSet()
+            val trashCount = targets.count { it.id != current.id }
+            val undoItems =
+                targets.map { asset ->
+                    UndoItem(
+                        mediaId = asset.id,
+                        mediaName = asset.displayName,
+                        mediaType = asset.mediaType.name,
+                        beforeStatus = dao.get(asset.id)?.status.orEmpty().ifEmpty { null },
+                    )
+                }
+            val undo =
+                UndoState(
+                    mediaId = current.id,
+                    mediaName = "${targets.size} 张相似照片",
+                    mediaType = current.mediaType.name,
+                    beforeStatus = null,
+                    items = undoItems,
+                    message = "已保留当前，$trashCount 张加入待删除",
+                    createdAt = now,
+                )
+            _uiState.update { it.copy(undo = undo, feedbackMessage = undo.message) }
+            targets.forEach { asset ->
+                val status = if (asset.id == current.id) MediaStatus.KEEP else MediaStatus.TRASH
+                val before = dao.get(asset.id)?.status.orEmpty()
+                dao.upsert(toEntity(asset, status))
+                logDao.insert(
+                    UserActionLogEntity(
+                        mediaId = asset.id,
+                        mediaName = asset.displayName,
+                        mediaType = asset.mediaType.name,
+                        action = status.value,
+                        source = s.queueSource,
+                        beforeState = before,
+                        afterState = status.value,
+                        freedBytes = 0L,
+                        createdAt = now,
+                    ),
+                )
+            }
+            settingsRepo.addProcessed(targets.size)
+            clearFeedbackAfterDelay(undo)
+            _uiState.update { state ->
+                val updatedStatuses =
+                    state.statuses.filterNot { it.localAssetId in targetIds } +
+                        targets.map { asset ->
+                            toEntity(
+                                asset,
+                                if (asset.id == current.id) MediaStatus.KEEP else MediaStatus.TRASH,
+                            )
+                        }
+                recompute(
+                    state.copy(
+                        statuses = updatedStatuses,
+                        processedCount = state.processedCount + targets.size,
+                        undo = undo,
+                        feedbackMessage = undo.message,
+                    ),
+                )
+            }
+        }
+    }
+
+    /** 待删除页发起真实删除：优先移入系统回收站，失败时才使用系统永久删除请求兜底。 */
+    fun requestDeleteTrash(ids: Set<Long>) {
+        val s = _uiState.value
+        val selectedIds = ids.ifEmpty { s.trashItems.map { it.id }.toSet() }
+        val byId = s.trashItems.associateBy { it.id }
+        val assets = selectedIds.mapNotNull { byId[it] }
+        if (assets.isEmpty()) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // 优先移入系统「最近删除」；系统不支持时才降级为永久删除
+            val uris = assets.map { it.uri }
             val sender =
-                (coordinator.createTrashRequest(listOf(asset.uri)) ?: coordinator.createDeleteRequest(listOf(asset.uri)))
+                (coordinator.createTrashRequest(uris) ?: coordinator.createDeleteRequest(uris))
                     ?.intentSender
             if (sender == null) {
                 _uiState.update { it.copy(error = "无法发起系统删除确认") }
             } else {
-                _uiState.update { it.copy(pendingDelete = sender) }
+                _uiState.update {
+                    it.copy(
+                        pendingDelete = sender,
+                        trashDeleteIdsInFlight = assets.map { asset -> asset.id }.toSet(),
+                        feedbackMessage = "等待系统确认 ${assets.size} 项删除",
+                        error = null,
+                    )
+                }
             }
         } else {
+            _uiState.update { it.copy(feedbackMessage = "正在删除 ${assets.size} 项", error = null) }
             viewModelScope.launch {
-                val ok = coordinator.deleteToTrash(asset)
-                if (!ok) {
-                    _uiState.update { it.copy(error = "删除失败：${asset.displayName}") }
+                val okIds = assets.filter { coordinator.deleteToTrash(it) }.map { it.id }.toSet()
+                if (okIds.isEmpty()) {
+                    _uiState.update { it.copy(error = "删除失败，系统未允许移除这些照片") }
                     return@launch
                 }
-                finishAction(asset, MediaStatus.DELETE)
+                finishTrashDelete(okIds)
             }
         }
     }
 
-    /** 系统删除确认弹窗用户点「允许」后回调（API 30+，系统已完成删除并移入最近删除）。 */
+    /** 系统删除确认弹窗用户点「允许」后回调（API 30+，系统已完成删除或移入最近删除）。 */
     fun onDeleteApproved() {
-        val asset = _uiState.value.current ?: return
-        viewModelScope.launch { finishAction(asset, MediaStatus.DELETE) }
+        val ids = _uiState.value.trashDeleteIdsInFlight
+        if (ids.isEmpty()) return
+        viewModelScope.launch { finishTrashDelete(ids) }
     }
 
     fun clearPendingDelete() {
-        _uiState.update { it.copy(pendingDelete = null) }
+        _uiState.update {
+            it.copy(
+                pendingDelete = null,
+                trashDeleteIdsInFlight = emptySet(),
+                feedbackMessage = "已取消删除，照片仍保留在待删除复核页",
+            )
+        }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
+    /** 从待删除恢复到未整理队列，或在单张复核时直接标记保留。 */
+    fun restoreFromTrash(
+        ids: Set<Long>,
+        targetStatus: MediaStatus? = null,
+    ) {
+        if (ids.isEmpty()) return
+        val byId = _uiState.value.trashItems.associateBy { it.id }
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val restoredStatuses =
+                ids.mapNotNull { id ->
+                    val asset = byId[id] ?: return@mapNotNull null
+                    targetStatus?.let { status -> toEntity(asset, status).copy(updatedAt = now) }
+                }
+            if (targetStatus == null) {
+                dao.deleteByIds(ids.toList())
+            } else {
+                restoredStatuses.forEach { dao.upsert(it) }
+            }
+            ids.forEach { id ->
+                byId[id]?.let { asset ->
+                    logDao.insert(
+                        UserActionLogEntity(
+                            mediaId = asset.id,
+                            mediaName = asset.displayName,
+                            mediaType = asset.mediaType.name,
+                            action = "restore",
+                            source = "待删除",
+                            beforeState = MediaStatus.TRASH.value,
+                            afterState = targetStatus?.value.orEmpty(),
+                            createdAt = now,
+                        ),
+                    )
+                }
+            }
+            if (targetStatus == null) {
+                settingsRepo.addProcessed(-ids.size)
+            }
+            _uiState.update { s ->
+                val updatedStatuses =
+                    s.statuses.filterNot { it.localAssetId in ids } + restoredStatuses
+                val restoredCount = ids.count { it in byId }
+                recompute(
+                    s.copy(
+                        statuses = updatedStatuses,
+                        undo = null,
+                        feedbackMessage =
+                            if (targetStatus == MediaStatus.KEEP) {
+                                "已标记保留 $restoredCount 项"
+                            } else {
+                                "已恢复 $restoredCount 项到未整理"
+                            },
+                        error = null,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun undoLast() {
+        val undo = _uiState.value.undo ?: return
+        val undoItems = undo.undoItems
+        if (undoItems.isEmpty()) return
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val restoredStatuses =
+                undoItems.mapNotNull { item ->
+                    item.beforeStatus
+                        ?.takeIf { it.isNotEmpty() }
+                        ?.let {
+                            MediaStatusEntity(
+                                localAssetId = item.mediaId,
+                                mediaType = item.mediaType,
+                                status = it,
+                                updatedAt = now,
+                            )
+                        }
+                }
+            val restoredById = restoredStatuses.associateBy { it.localAssetId }
+            undoItems.forEach { item ->
+                val restoredStatus = restoredById[item.mediaId]
+                if (restoredStatus == null) {
+                    dao.deleteByIds(listOf(item.mediaId))
+                } else {
+                    dao.upsert(restoredStatus)
+                }
+                if (item.albumId != null && item.albumItemAdded) {
+                    albumDao.removeItem(item.albumId, item.mediaId)
+                }
+                logDao.insert(
+                    UserActionLogEntity(
+                        mediaId = item.mediaId,
+                        mediaName = item.mediaName,
+                        mediaType = item.mediaType,
+                        action = "undo",
+                        source = _uiState.value.queueSource,
+                        beforeState = _uiState.value.statusById[item.mediaId].orEmpty(),
+                        afterState = restoredStatus?.status.orEmpty(),
+                        createdAt = now,
+                    ),
+                )
+            }
+            settingsRepo.addProcessed(-undoItems.size)
+            _uiState.update { s ->
+                val undoIds = undoItems.map { it.mediaId }.toSet()
+                val statuses =
+                    s.statuses
+                        .filterNot { it.localAssetId in undoIds } +
+                        restoredStatuses
+                val updated =
+                    recompute(
+                        s.copy(
+                            statuses = statuses,
+                            processedCount = (s.processedCount - undoItems.size).coerceAtLeast(0),
+                            undo = null,
+                            feedbackMessage = "已撤销",
+                        ),
+                    )
+                val restoredIndex = updated.queueItems.indexOfFirst { it.id == undo.mediaId }
+                if (restoredIndex >= 0) {
+                    updated.copy(currentIndex = restoredIndex)
+                } else {
+                    updated
+                }
+            }
+            clearTransientFeedbackAfterDelay("已撤销")
+        }
     }
 
     // ---------------- 应用内相册 ----------------
@@ -302,17 +708,242 @@ class HomeViewModel(
     fun createAlbum(name: String) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
+        if (albumWithName(trimmed) != null) return
         viewModelScope.launch {
             albumDao.insertAlbum(AlbumEntity(name = trimmed, createdAt = System.currentTimeMillis()))
         }
     }
 
-    /** 把当前卡片加入指定相册（PRD 4.2 加入相册）。 */
-    fun addCurrentToAlbum(albumId: Long) {
-        val asset = _uiState.value.current ?: return
+    fun renameAlbum(
+        albumId: Long,
+        name: String,
+    ) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        if (albumWithName(trimmed, excludeAlbumId = albumId) != null) return
         viewModelScope.launch {
+            albumDao.renameAlbum(albumId, trimmed)
+        }
+    }
+
+    fun deleteAlbum(albumId: Long) {
+        viewModelScope.launch {
+            albumDao.deleteAlbumItems(albumId)
+            albumDao.deleteAlbum(albumId)
+            settingsRepo.setAlbumPinned(albumId, false)
+            settingsRepo.setAlbumHidden(albumId, false)
+            _uiState.update { s ->
+                if (s.openAlbumId == albumId) {
+                    s.copy(openAlbumId = null, openAlbumMediaIds = emptyList())
+                } else {
+                    s
+                }
+            }
+        }
+    }
+
+    fun mergeAlbum(
+        sourceAlbumId: Long,
+        targetAlbumId: Long,
+    ) {
+        if (sourceAlbumId == targetAlbumId) return
+        viewModelScope.launch {
+            val sourceItems = albumDao.getItems(sourceAlbumId)
+            sourceItems.forEach { item ->
+                albumDao.addItem(
+                    AlbumItemEntity(
+                        albumId = targetAlbumId,
+                        mediaId = item.mediaId,
+                        addedAt = item.addedAt,
+                    ),
+                )
+            }
+            albumDao.deleteAlbumItems(sourceAlbumId)
+            albumDao.deleteAlbum(sourceAlbumId)
+            settingsRepo.setAlbumPinned(sourceAlbumId, false)
+            settingsRepo.setAlbumHidden(sourceAlbumId, false)
+            val targetIds = albumDao.getItems(targetAlbumId).map { it.mediaId }
+            _uiState.update { s ->
+                if (s.openAlbumId == sourceAlbumId) {
+                    s.copy(openAlbumId = targetAlbumId, openAlbumMediaIds = targetIds)
+                } else {
+                    s
+                }
+            }
+        }
+    }
+
+    fun setAlbumPinned(
+        albumId: Long,
+        pinned: Boolean,
+    ) {
+        viewModelScope.launch {
+            settingsRepo.setAlbumPinned(albumId, pinned)
+        }
+    }
+
+    fun setAlbumHidden(
+        albumId: Long,
+        hidden: Boolean,
+    ) {
+        viewModelScope.launch {
+            settingsRepo.setAlbumHidden(albumId, hidden)
+        }
+    }
+
+    fun moveAlbumOrder(
+        albumId: Long,
+        direction: Int,
+    ) {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val visibleIds =
+                orderedAlbumIds(
+                    albums = state.albums.filter { it.id !in state.hiddenAlbumIds },
+                    orderIds = state.albumOrderIds,
+                )
+            val from = visibleIds.indexOf(albumId)
+            if (from < 0) return@launch
+            val to = (from + direction).coerceIn(0, visibleIds.lastIndex)
+            if (from == to) return@launch
+            val next = visibleIds.toMutableList()
+            val moved = next.removeAt(from)
+            next.add(to, moved)
+            settingsRepo.setAlbumOrderIds(next)
+        }
+    }
+
+    fun setFeedActionBarExpanded(expanded: Boolean) {
+        viewModelScope.launch {
+            settingsRepo.setFeedActionBarExpanded(expanded)
+        }
+    }
+
+    fun setFeedGestureGuideSeen(seen: Boolean) {
+        viewModelScope.launch {
+            settingsRepo.setFeedGestureGuideSeen(seen)
+        }
+    }
+
+    /**
+     * 将系统图库里的一个来源相册导入为 App 内本地映射。
+     * 这里只建立本地映射并标记未整理项为已归类，不移动、不重命名系统文件。
+     */
+    fun importSystemAlbum(
+        bucketKey: String,
+        bucketName: String,
+    ) {
+        val name = bucketName.ifBlank { "系统相册" }.trim()
+        if (bucketKey.isBlank()) return
+        val state = _uiState.value
+        val blockedStatuses = setOf(MediaStatus.TRASH.value, MediaStatus.DELETE.value)
+        val statusById = state.statusById
+        val assets =
+            state.allAssets.filter { asset ->
+                asset.bucketFilterKey() == bucketKey &&
+                    statusById[asset.id] !in blockedStatuses
+            }
+        if (assets.isEmpty()) return
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val albumId =
+                albumWithName(name)?.id
+                    ?: albumDao.insertAlbum(AlbumEntity(name = name, createdAt = now))
+            var mappedCount = 0
+            var organizedCount = 0
+            assets.forEach { asset ->
+                if (albumDao.itemCount(albumId, asset.id) == 0) {
+                    mappedCount += 1
+                }
+                albumDao.addItem(AlbumItemEntity(albumId = albumId, mediaId = asset.id, addedAt = now))
+                val before = dao.get(asset.id)?.status.orEmpty()
+                if (before.isBlank() || before == MediaStatus.LATER.value) {
+                    dao.upsert(toEntity(asset, MediaStatus.ALBUM))
+                    organizedCount += 1
+                    logDao.insert(
+                        UserActionLogEntity(
+                            mediaId = asset.id,
+                            mediaName = asset.displayName,
+                            mediaType = asset.mediaType.name,
+                            action = MediaStatus.ALBUM.value,
+                            source = "导入系统相册映射 · $name",
+                            beforeState = before,
+                            afterState = MediaStatus.ALBUM.value,
+                            freedBytes = 0L,
+                            createdAt = now,
+                        ),
+                    )
+                }
+            }
+            val ids = albumDao.getItems(albumId).map { it.mediaId }
+            val message =
+                if (organizedCount > 0) {
+                    "已导入「$name」：$mappedCount 项，$organizedCount 张标记已归类"
+                } else {
+                    "已导入「$name」：$mappedCount 项"
+                }
+            _uiState.update { s ->
+                recompute(
+                    s.copy(
+                        openAlbumId = albumId,
+                        openAlbumMediaIds = ids,
+                        feedbackMessage = message,
+                    ),
+                )
+            }
+            clearTransientFeedbackAfterDelay(message)
+        }
+    }
+
+    /** 新建相册后立刻把当前卡片归入该相册，保持刷卡流不中断。 */
+    fun createAlbumAndAddCurrent(name: String) {
+        val asset = _uiState.value.current ?: return
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            val existingAlbum = albumWithName(trimmed)
+            val albumId =
+                existingAlbum?.id
+                    ?: albumDao.insertAlbum(AlbumEntity(name = trimmed, createdAt = System.currentTimeMillis()))
+            val existed = albumDao.itemCount(albumId, asset.id) > 0
             albumDao.addItem(
                 AlbumItemEntity(albumId = albumId, mediaId = asset.id, addedAt = System.currentTimeMillis()),
+            )
+            finishAction(
+                asset = asset,
+                status = MediaStatus.ALBUM,
+                message =
+                    when {
+                        existingAlbum == null -> "已新建并加入「$trimmed」"
+                        existed -> "已在「$trimmed」中，继续下一张"
+                        else -> "已加入「$trimmed」"
+                    },
+                undoAlbumId = albumId,
+                undoAlbumItemAdded = !existed,
+            )
+        }
+    }
+
+    /** 把当前卡片加入相册。刷卡流只记录归类，避免系统写入弹窗打断连续整理。 */
+    fun addCurrentToAlbum(albumId: Long) {
+        val asset = _uiState.value.current ?: return
+        val albumName = _uiState.value.albums.firstOrNull { it.id == albumId }?.name ?: "相册"
+        viewModelScope.launch {
+            val existed = albumDao.itemCount(albumId, asset.id) > 0
+            albumDao.addItem(
+                AlbumItemEntity(albumId = albumId, mediaId = asset.id, addedAt = System.currentTimeMillis()),
+            )
+            finishAction(
+                asset = asset,
+                status = MediaStatus.ALBUM,
+                message =
+                    if (existed) {
+                        "已在「$albumName」中，继续下一张"
+                    } else {
+                        "已加入「$albumName」"
+                    },
+                undoAlbumId = albumId,
+                undoAlbumItemAdded = !existed,
             )
         }
     }
@@ -336,74 +967,6 @@ class HomeViewModel(
             albumDao.removeItem(albumId, mediaId)
             if (_uiState.value.openAlbumId == albumId) openAlbum(albumId)
         }
-    }
-
-    // ---------------- 批量确认 ----------------
-
-    fun enterBatch() {
-        val s = _uiState.value
-        val candidates = s.queueItems.filter { !s.isProtected(it) }
-        _uiState.update {
-            it.copy(
-                showBatch = true,
-                batchCandidates = candidates,
-                selectedIds = candidates.map { a -> a.id }.toSet(),
-            )
-        }
-    }
-
-    fun exitBatch() {
-        _uiState.update { it.copy(showBatch = false, selectedIds = emptySet(), batchCandidates = emptyList()) }
-    }
-
-    fun toggleSelect(id: Long) {
-        _uiState.update { s ->
-            val next = if (id in s.selectedIds) s.selectedIds - id else s.selectedIds + id
-            s.copy(selectedIds = next)
-        }
-    }
-
-    fun selectAllBatch(on: Boolean) {
-        _uiState.update { s ->
-            s.copy(selectedIds = if (on) s.batchCandidates.map { it.id }.toSet() else emptySet())
-        }
-    }
-
-    /** 发起批量删除：按 [OrganizeSettings.batchChunkSize] 分批，避免系统 URI 数量上限。 */
-    fun confirmBatch() {
-        val s = _uiState.value
-        val chunk = s.settings.batchChunkSize.coerceAtLeast(1)
-        val ids = s.selectedIds.toList().take(chunk)
-        if (ids.isEmpty()) return
-        val byId = s.allAssets.associateBy { it.id }
-        val uris = ids.mapNotNull { byId[it]?.uri }
-        if (uris.isEmpty()) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // 批量同样优先走系统「最近删除」
-            val sender =
-                (coordinator.createTrashRequest(uris) ?: coordinator.createDeleteRequest(uris))
-                    ?.intentSender
-            if (sender == null) {
-                _uiState.update { it.copy(error = "无法发起系统删除确认") }
-            } else {
-                _uiState.update { it.copy(pendingBatchDelete = sender, batchIdsInFlight = ids.toSet()) }
-            }
-        } else {
-            viewModelScope.launch {
-                val okIds = ids.filter { id -> byId[id]?.let { coordinator.deleteToTrash(it) } == true }
-                finishBatch(okIds.toSet())
-            }
-        }
-    }
-
-    fun onBatchApproved() {
-        val ids = _uiState.value.batchIdsInFlight
-        if (ids.isEmpty()) return
-        viewModelScope.launch { finishBatch(ids) }
-    }
-
-    fun clearPendingBatch() {
-        _uiState.update { it.copy(pendingBatchDelete = null, batchIdsInFlight = emptySet()) }
     }
 
     // ---------------- 恢复（App 内「最近删除」） ----------------
@@ -459,20 +1022,64 @@ class HomeViewModel(
 
     // ---------------- 设置 ----------------
 
-    fun setProtectFavorite(v: Boolean) {
-        viewModelScope.launch { settingsRepo.setProtectFavorite(v) }
-    }
-
-    fun setProtectRecentDays(v: Int) {
-        viewModelScope.launch { settingsRepo.setProtectRecentDays(v) }
-    }
-
-    fun setBatchChunk(v: Int) {
-        viewModelScope.launch { settingsRepo.setBatchChunk(v) }
-    }
-
     fun setDailyGoal(v: Int) {
         viewModelScope.launch { settingsRepo.setDailyGoal(v) }
+    }
+
+    fun setReminderEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepo.setReminderEnabled(enabled)
+            if (enabled) {
+                ScanWorker.enqueueOnce(getApplication())
+            }
+        }
+    }
+
+    fun setReminderIntervalDays(days: Int) {
+        viewModelScope.launch { settingsRepo.setReminderIntervalDays(days) }
+    }
+
+    fun setQuietHours(
+        startHour: Int,
+        endHour: Int,
+    ) {
+        viewModelScope.launch { settingsRepo.setQuietHours(startHour, endHour) }
+    }
+
+    /** 测试入口：只重置 App 内状态，不会恢复已经被系统删除或移入回收站的真实文件。 */
+    fun resetForTesting() {
+        viewModelScope.launch {
+            dao.clearAll()
+            albumDao.clearItems()
+            logDao.clearAll()
+            settingsRepo.resetDaily()
+            _uiState.update { s ->
+                recompute(
+                    s.copy(
+                        currentIndex = 0,
+                        processedCount = 0,
+                        freedBytes = 0,
+                        pendingDelete = null,
+                        pendingRestore = null,
+                        restoringLogId = null,
+                        undo = null,
+                        feedbackMessage = null,
+                        error = null,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun removeFromAlbum(
+        albumId: Long,
+        mediaIds: Set<Long>,
+    ) {
+        if (mediaIds.isEmpty()) return
+        viewModelScope.launch {
+            mediaIds.forEach { mediaId -> albumDao.removeItem(albumId, mediaId) }
+            if (_uiState.value.openAlbumId == albumId) openAlbum(albumId)
+        }
     }
 
     // ---------------- 内部 ----------------
@@ -489,13 +1096,30 @@ class HomeViewModel(
         val filtered =
             s.allAssets.filter { asset ->
                 (s.filterType == null || asset.mediaType == s.filterType) &&
-                    (s.filterBucket == null || asset.bucketId == s.filterBucket)
+                    (s.filterBucket == null || asset.bucketFilterKey() == s.filterBucket)
             }
-        val processedIds = s.statuses.map { it.localAssetId }.toSet()
-        val queues = QueueEngine.build(filtered, processedIds)
+        val blockedStatuses = setOf(MediaStatus.TRASH.value, MediaStatus.DELETE.value)
+        val statusById = s.statuses.associate { it.localAssetId to it.status }
+        val activeAssets = filtered.filter { statusById[it.id] !in blockedStatuses }
+        val processedIds = s.statuses
+            .filter { it.status !in blockedStatuses }
+            .map { it.localAssetId }
+            .toSet()
+        val laterIds =
+            s.statuses
+                .filter { it.status == MediaStatus.LATER.value }
+                .map { it.localAssetId }
+                .toSet()
+        val favoriteIds =
+            s.statuses
+                .filter { it.status == MediaStatus.FAVORITE.value }
+                .map { it.localAssetId }
+                .toSet()
+        val queues = QueueEngine.build(activeAssets, processedIds, laterIds, favoriteIds)
         val picked =
             queues.firstOrNull { it.type == s.queueType && it.title == s.queueTitle }
                 ?: queues.firstOrNull { it.type == s.queueType }
+                ?: queues.firstOrNull { it.type == QueueType.UNPROCESSED }
                 ?: queues.firstOrNull { it.type == QueueType.RANDOM }
         val items = picked?.items.orEmpty()
         return s.copy(
@@ -503,53 +1127,119 @@ class HomeViewModel(
             queues = queues,
             queueTitle = picked?.title.orEmpty(),
             queueItems = items,
-            currentIndex = s.currentIndex.coerceIn(0, items.size),
+            currentIndex = if (items.isEmpty()) 0 else s.currentIndex.coerceIn(0, items.lastIndex),
         )
     }
 
     private suspend fun finishAction(
         asset: MediaAsset,
         status: MediaStatus,
+        message: String = actionMessage(status),
+        logAction: String = status.value,
+        undoAlbumId: Long? = null,
+        undoAlbumItemAdded: Boolean = false,
     ) {
+        val now = System.currentTimeMillis()
         val before = dao.get(asset.id)?.status.orEmpty()
         val source = _uiState.value.queueSource
+        val undo =
+            UndoState(
+                mediaId = asset.id,
+                mediaName = asset.displayName,
+                mediaType = asset.mediaType.name,
+                beforeStatus = before.ifEmpty { null },
+                albumId = undoAlbumId,
+                albumItemAdded = undoAlbumItemAdded,
+                message = message,
+                createdAt = now,
+            )
+        _uiState.update { it.copy(undo = undo, feedbackMessage = message) }
         dao.upsert(toEntity(asset, status))
+        _uiState.update { s ->
+            recompute(
+                s.copy(
+                    currentIndex = s.currentIndex.coerceAtMost(s.queueItems.size),
+                    processedCount = s.processedCount + 1,
+                    undo = undo,
+                    feedbackMessage = message,
+                ),
+            )
+        }
+        clearFeedbackAfterDelay(undo)
         logDao.insert(
             UserActionLogEntity(
                 mediaId = asset.id,
                 mediaName = asset.displayName,
                 mediaType = asset.mediaType.name,
-                action = status.value,
+                action = logAction,
                 source = source,
                 beforeState = before,
                 afterState = status.value,
-                freedBytes = if (status == MediaStatus.DELETE) asset.size else 0L,
-                createdAt = System.currentTimeMillis(),
+                freedBytes = 0L,
+                createdAt = now,
             ),
         )
         settingsRepo.addProcessed(1)
-        _uiState.update { s ->
-            val isDelete = status == MediaStatus.DELETE
-            // 删除后立即移出内存列表，避免已进回收站的照片仍出现在卡片流和统计里。
-            val base =
-                if (isDelete) s.copy(allAssets = s.allAssets.filter { it.id != asset.id }) else s
-            // 「未整理」队列处理完会被移出、删除项也会被移出，下一张自动补位，因此不推进索引。
-            val advance = if (base.queueType == QueueType.UNPROCESSED || isDelete) 0 else 1
-            recompute(
-                base.copy(
-                    freedBytes = base.freedBytes + if (isDelete) asset.size else 0L,
-                    currentIndex = (base.currentIndex + advance).coerceAtMost(base.queueItems.size),
-                    processedCount = base.processedCount + 1,
-                ),
-            )
+    }
+
+    fun clearFeedback() {
+        _uiState.update { it.copy(feedbackMessage = null) }
+    }
+
+    private fun clearFeedbackAfterDelay(undo: UndoState) {
+        viewModelScope.launch {
+            delay(UNDO_VISIBLE_MS)
+            _uiState.update { state ->
+                if (state.undo?.mediaId == undo.mediaId && state.undo?.createdAt == undo.createdAt) {
+                    state.copy(undo = null, feedbackMessage = null)
+                } else {
+                    state
+                }
+            }
         }
     }
 
-    private suspend fun finishBatch(ids: Set<Long>) {
+    private fun clearTransientFeedbackAfterDelay(message: String) {
+        viewModelScope.launch {
+            delay(FEEDBACK_VISIBLE_MS)
+            _uiState.update { state ->
+                if (state.undo == null && state.feedbackMessage == message) {
+                    state.copy(feedbackMessage = null)
+                } else {
+                    state
+                }
+            }
+        }
+    }
+
+    private fun actionMessage(status: MediaStatus): String =
+        when (status) {
+            MediaStatus.TRASH -> "已加入待删除"
+            MediaStatus.KEEP -> "已保留"
+            MediaStatus.ALBUM -> "已归类"
+            MediaStatus.LATER -> "已标记稍后"
+            MediaStatus.FAVORITE -> "已收藏"
+            MediaStatus.DELETE -> "已删除"
+        }
+
+    private suspend fun finishTrashDelete(ids: Set<Long>) {
+        runCatching { library.sync(full = false) }
+        val remainingIds = indexDao.allIds().toSet()
+        val deletedIds = ids.filter { it !in remainingIds }.toSet()
+        val failedIds = ids - deletedIds
+        if (deletedIds.isEmpty()) {
+            _uiState.update {
+                it.copy(
+                    error = "删除未完成，系统仍能看到这些照片，已保留在待删除复核页。",
+                    pendingDelete = null,
+                    trashDeleteIdsInFlight = emptySet(),
+                )
+            }
+            return
+        }
         val byId = _uiState.value.allAssets.associateBy { it.id }
-        val source = _uiState.value.queueSource
         var freed = 0L
-        ids.forEach { id ->
+        deletedIds.forEach { id ->
             byId[id]?.let { asset ->
                 val before = dao.get(asset.id)?.status.orEmpty()
                 dao.upsert(toEntity(asset, MediaStatus.DELETE))
@@ -559,7 +1249,7 @@ class HomeViewModel(
                         mediaName = asset.displayName,
                         mediaType = asset.mediaType.name,
                         action = MediaStatus.DELETE.value,
-                        source = source,
+                        source = "待删除",
                         beforeState = before,
                         afterState = MediaStatus.DELETE.value,
                         freedBytes = asset.size,
@@ -569,18 +1259,28 @@ class HomeViewModel(
                 freed += asset.size
             }
         }
-        settingsRepo.addProcessed(ids.size)
         _uiState.update { s ->
             recompute(
                 s.copy(
-                    allAssets = s.allAssets.filter { it.id !in ids },
+                    allAssets = s.allAssets.filter { it.id !in deletedIds },
                     freedBytes = s.freedBytes + freed,
-                    processedCount = s.processedCount + ids.size,
-                    selectedIds = s.selectedIds - ids,
-                    batchIdsInFlight = emptySet(),
-                    pendingBatchDelete = null,
-                    showBatch = false,
-                    currentIndex = 0,
+                    pendingDelete = null,
+                    trashDeleteIdsInFlight = emptySet(),
+                    undo = null,
+                    feedbackMessage =
+                        if (failedIds.isNotEmpty()) {
+                            "已处理 ${deletedIds.size} 项，${failedIds.size} 项仍待复核"
+                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            "已移入最近删除 ${deletedIds.size} 项"
+                        } else {
+                            "已删除 ${deletedIds.size} 项"
+                        },
+                    error =
+                        if (failedIds.isNotEmpty()) {
+                            "${failedIds.size} 张照片未被系统移除，已继续保留在待删除复核页。"
+                        } else {
+                            s.error
+                        },
                 ),
             )
         }
@@ -595,4 +1295,43 @@ class HomeViewModel(
         status = status.value,
         updatedAt = System.currentTimeMillis(),
     )
+
+    private fun MediaAsset.bucketFilterKey(): String =
+        bucketId.ifBlank { bucketName.ifBlank { "unknown" } }
+
+    private fun orderedAlbumIds(
+        albums: List<AlbumEntity>,
+        orderIds: List<Long>,
+    ): List<Long> {
+        val existingIds = albums.map { it.id }.toSet()
+        val ordered = orderIds.filter { it in existingIds }
+        val missing =
+            albums
+                .filter { it.id !in ordered }
+                .sortedByDescending { it.createdAt }
+                .map { it.id }
+        return ordered + missing
+    }
+
+    private fun albumWithName(
+        name: String,
+        excludeAlbumId: Long? = null,
+    ): AlbumEntity? =
+        _uiState.value.albums.firstOrNull { album ->
+            album.id != excludeAlbumId && album.name.equals(name, ignoreCase = true)
+        }
+
+    private fun hasPartialMediaAccess(app: Application): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return false
+        val hasPartial =
+            ContextCompat.checkSelfPermission(app, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) ==
+                PackageManager.PERMISSION_GRANTED
+        val hasFullImages =
+            ContextCompat.checkSelfPermission(app, Manifest.permission.READ_MEDIA_IMAGES) ==
+                PackageManager.PERMISSION_GRANTED
+        val hasFullVideo =
+            ContextCompat.checkSelfPermission(app, Manifest.permission.READ_MEDIA_VIDEO) ==
+                PackageManager.PERMISSION_GRANTED
+        return hasPartial && !(hasFullImages && hasFullVideo)
+    }
 }

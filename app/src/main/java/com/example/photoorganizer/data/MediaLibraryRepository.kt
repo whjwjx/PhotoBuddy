@@ -31,6 +31,9 @@ class MediaLibraryRepository(
         onProgress: ((scanned: Int) -> Unit)? = null,
     ): Int {
         val sinceSec = if (full) 0L else settings.getLastScanMs() / 1000
+        if (full) {
+            indexDao.clear()
+        }
         var total = 0
         mediaStore.loadSinceBatched(sinceSec) { batch, count ->
             indexDao.upsertAll(batch.map { it.toIndex() })

@@ -10,9 +10,13 @@ enum class QueueType(val label: String) {
     RANDOM("随机整理"),
     SCREENSHOT("截图"),
     LARGE_VIDEO("大视频"),
+    SIMILAR("相似照片"),
     RECENT_30("最近 30 天"),
+    ON_THIS_DAY("往年今日"),
+    ALBUM("按相册"),
     MONTH("按月份"),
     UNPROCESSED("未整理"),
+    LATER("稍后"),
     FAVORITE("收藏"),
 }
 
@@ -40,31 +44,60 @@ object QueueEngine {
     fun build(
         assets: List<MediaAsset>,
         processedIds: Set<Long> = emptySet(),
+        laterIds: Set<Long> = emptySet(),
+        favoriteIds: Set<Long> = emptySet(),
     ): List<MediaQueue> {
         val now = System.currentTimeMillis()
+        val unprocessed = assets.filter { it.id !in processedIds }
+        val later = assets.filter { it.id in laterIds }
+        val favorites = assets.filter { it.isFavorite || it.id in favoriteIds }
         val out = mutableListOf<MediaQueue>()
-        out += queue(QueueType.RANDOM, "", assets)
-        out += queue(QueueType.SCREENSHOT, "", assets.filter { it.isScreenshot() })
+        out += queue(QueueType.RANDOM, "", unprocessed)
+        out += queue(QueueType.SCREENSHOT, "", unprocessed.filter { it.isScreenshot() })
         out += queue(
             QueueType.LARGE_VIDEO,
             "",
-            assets.filter { it.mediaType == MediaType.VIDEO && it.size >= LARGE_VIDEO_BYTES },
+            unprocessed.filter { it.mediaType == MediaType.VIDEO && it.size >= LARGE_VIDEO_BYTES },
         )
+        out += queue(QueueType.SIMILAR, "", similarCandidates(unprocessed))
         out += queue(
             QueueType.RECENT_30,
             "",
-            assets.filter { it.capturedAt > 0 && it.capturedAt >= now - 30 * DAY_MS },
+            unprocessed.filter { it.capturedAt > 0 && it.capturedAt >= now - 30 * DAY_MS },
         )
-        out += queue(QueueType.UNPROCESSED, "", assets.filter { it.id !in processedIds })
-        out += queue(QueueType.FAVORITE, "", assets.filter { it.isFavorite })
+        out += queue(QueueType.ON_THIS_DAY, "", onThisDayCandidates(unprocessed, now))
+        out += queue(QueueType.UNPROCESSED, "", unprocessed)
+        out += queue(QueueType.LATER, "", later)
+        out += queue(QueueType.FAVORITE, "", favorites)
+
+        unprocessed
+            .groupBy { albumKey(it) }
+            .values
+            .sortedWith(
+                compareByDescending<List<MediaAsset>> { it.size }
+                    .thenBy { albumTitle(it.firstOrNull()) },
+            )
+            .forEach { items -> out += queue(QueueType.ALBUM, albumTitle(items.firstOrNull()), items) }
 
         // 按月份拆分为多个队列，便于逐步整理历史相册（PRD 4.3 某个月份）
-        assets
+        unprocessed
             .groupBy { monthKey(it.capturedAt) }
             .toSortedMap(compareByDescending<String> { it })
             .forEach { (key, items) -> out += queue(QueueType.MONTH, key, items) }
         return out
     }
+
+    fun isSimilarGroupPeer(
+        a: MediaAsset,
+        b: MediaAsset,
+    ): Boolean =
+        a.mediaType == MediaType.IMAGE &&
+            b.mediaType == MediaType.IMAGE &&
+            a.width > 0 &&
+            a.height > 0 &&
+            b.width > 0 &&
+            b.height > 0 &&
+            SimilarBucket.from(a) == SimilarBucket.from(b)
 
     private fun queue(
         type: QueueType,
@@ -72,9 +105,76 @@ object QueueEngine {
         items: List<MediaAsset>,
     ) = MediaQueue(type, title, items, items.sumOf { it.size })
 
+    private fun similarCandidates(assets: List<MediaAsset>): List<MediaAsset> =
+        assets
+            .asSequence()
+            .filter { it.mediaType == MediaType.IMAGE && it.width > 0 && it.height > 0 }
+            .groupBy { SimilarBucket.from(it) }
+            .values
+            .filter { it.size >= 2 }
+            .flatten()
+            .sortedWith(compareBy<MediaAsset> { it.bucketName }.thenBy { captureOrAddedMs(it) }.thenBy { it.id })
+
+    private fun onThisDayCandidates(
+        assets: List<MediaAsset>,
+        now: Long,
+    ): List<MediaAsset> {
+        val today = Calendar.getInstance().apply { timeInMillis = now }
+        return assets
+            .filter { asset -> isOnThisDayFromPastYear(captureOrAddedMs(asset), today) }
+            .sortedByDescending { captureOrAddedMs(it) }
+    }
+
+    private fun isOnThisDayFromPastYear(
+        ms: Long,
+        today: Calendar,
+    ): Boolean {
+        if (ms <= 0L) return false
+        val captured = Calendar.getInstance().apply { timeInMillis = ms }
+        return captured.get(Calendar.YEAR) < today.get(Calendar.YEAR) &&
+            captured.get(Calendar.MONTH) == today.get(Calendar.MONTH) &&
+            captured.get(Calendar.DAY_OF_MONTH) == today.get(Calendar.DAY_OF_MONTH)
+    }
+
     private fun monthKey(ms: Long): String {
         if (ms <= 0) return "未知时间"
         val c = Calendar.getInstance().apply { timeInMillis = ms }
         return String.format(Locale.getDefault(), "%04d-%02d", c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1)
     }
+
+    private fun albumKey(asset: MediaAsset): String =
+        asset.bucketId.ifBlank { asset.bucketName.ifBlank { "unknown" } }
+
+    private fun albumTitle(asset: MediaAsset?): String =
+        asset?.bucketName?.ifBlank { null } ?: "未知相册"
+
+    private data class SimilarBucket(
+        val bucketId: String,
+        val timeWindow: Long,
+        val ratio: Int,
+        val longSide: Int,
+    ) {
+        companion object {
+            private const val WINDOW_MS = 5L * 60L * 1000L
+            private const val SIDE_BUCKET = 160
+
+            fun from(asset: MediaAsset): SimilarBucket {
+                val long = maxOf(asset.width, asset.height)
+                val short = minOf(asset.width, asset.height).coerceAtLeast(1)
+                return SimilarBucket(
+                    bucketId = asset.bucketId.ifEmpty { asset.bucketName },
+                    timeWindow = captureOrAddedMs(asset) / WINDOW_MS,
+                    ratio = (long * 100 / short),
+                    longSide = long / SIDE_BUCKET,
+                )
+            }
+        }
+    }
+
+    private fun captureOrAddedMs(asset: MediaAsset): Long =
+        when {
+            asset.capturedAt > 0 -> asset.capturedAt
+            asset.dateAdded > 0 -> asset.dateAdded * 1000L
+            else -> 0L
+        }
 }

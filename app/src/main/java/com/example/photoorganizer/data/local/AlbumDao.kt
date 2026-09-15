@@ -23,15 +23,37 @@ interface AlbumDao {
     @Query("SELECT * FROM album_items WHERE albumId = :albumId ORDER BY addedAt DESC")
     fun observeItems(albumId: Long): Flow<List<AlbumItemEntity>>
 
+    @Query("SELECT * FROM album_items ORDER BY addedAt DESC")
+    fun observeAllItems(): Flow<List<AlbumItemEntity>>
+
     @Query("SELECT * FROM album_items WHERE albumId = :albumId ORDER BY addedAt DESC")
     suspend fun getItems(albumId: Long): List<AlbumItemEntity>
 
+    @Query("SELECT COUNT(*) FROM album_items WHERE albumId = :albumId AND mediaId = :mediaId")
+    suspend fun itemCount(
+        albumId: Long,
+        mediaId: Long,
+    ): Int
+
+    @Query("UPDATE albums SET name = :name WHERE id = :albumId")
+    suspend fun renameAlbum(
+        albumId: Long,
+        name: String,
+    )
+
     @Query("DELETE FROM albums WHERE id = :albumId")
     suspend fun deleteAlbum(albumId: Long)
+
+    @Query("DELETE FROM album_items WHERE albumId = :albumId")
+    suspend fun deleteAlbumItems(albumId: Long)
 
     @Query("DELETE FROM album_items WHERE albumId = :albumId AND mediaId = :mediaId")
     suspend fun removeItem(
         albumId: Long,
         mediaId: Long,
     )
+
+    /** 测试用：清空相册归类关系，但保留相册名称，方便继续测试快捷相册入口。 */
+    @Query("DELETE FROM album_items")
+    suspend fun clearItems()
 }
