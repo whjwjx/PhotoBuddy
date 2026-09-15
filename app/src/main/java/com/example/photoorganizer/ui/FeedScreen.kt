@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -31,11 +32,13 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PhotoAlbum
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
@@ -1012,6 +1015,8 @@ private fun AlbumQuickBar(
             items(quickAlbums) { album ->
                 AlbumChip(
                     text = album.name,
+                    detail = "${state.albumCounts[album.id] ?: 0} 项",
+                    icon = Icons.Default.PhotoAlbum,
                     onClick = { onPick(album.id) },
                     onLongClick = { onManage(album) },
                 )
@@ -1019,6 +1024,7 @@ private fun AlbumQuickBar(
             item {
                 AlbumChip(
                     text = if (state.albums.isEmpty()) "新建标签" else "更多标签",
+                    icon = if (state.albums.isEmpty()) Icons.Default.Add else Icons.Default.MoreHoriz,
                     onClick = onMore,
                 )
             }
@@ -1030,10 +1036,12 @@ private fun AlbumQuickBar(
 @OptIn(ExperimentalFoundationApi::class)
 private fun AlbumChip(
     text: String,
+    detail: String? = null,
+    icon: ImageVector? = null,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
 ) {
-    Box(
+    Row(
         modifier =
             Modifier
                 .clip(RoundedCornerShape(100.dp))
@@ -1043,16 +1051,39 @@ private fun AlbumChip(
                     onClick = onClick,
                     onLongClick = onLongClick,
                 )
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center,
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text,
-            color = Color.White,
-            style = MaterialTheme.typography.labelLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (icon != null) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier.size(17.dp),
+            )
+        }
+        Column(
+            modifier = Modifier.widthIn(max = 140.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
+        ) {
+            Text(
+                text,
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (detail != null) {
+                Text(
+                    detail,
+                    color = Color.White.copy(alpha = 0.62f),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 
