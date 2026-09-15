@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -198,20 +199,28 @@ fun StatsScreen(
                     modifier = Modifier.weight(1f),
                 )
                 StatMetricCard(
-                    icon = Icons.Default.Notifications,
-                    label = "提醒",
-                    value = if (state.settings.reminderEnabled) "已开启" else "未开启",
-                    helper =
-                        if (state.settings.reminderEnabled) {
-                            "${state.settings.reminderIntervalDays} 天 · ${state.settings.quietStartHour}:00-" +
-                                "${state.settings.quietEndHour}:00 静默"
-                        } else {
-                            "点此设置轻提醒"
-                        },
+                    icon = Icons.Default.DeleteOutline,
+                    label = "待释放",
+                    value = formatBytes(state.trashBytes),
+                    helper = "${state.trashCount} 项待复核",
                     modifier = Modifier.weight(1f),
-                    onClick = onOpenSettings,
+                    onClick = if (state.trashCount > 0) onOpenTrash else null,
                 )
             }
+            StatMetricCard(
+                icon = Icons.Default.Notifications,
+                label = "整理提醒",
+                value = if (state.settings.reminderEnabled) "已开启" else "未开启",
+                helper =
+                    if (state.settings.reminderEnabled) {
+                        "每 ${state.settings.reminderIntervalDays} 天 · " +
+                            "${state.settings.quietStartHour}:00-${state.settings.quietEndHour}:00 静默"
+                    } else {
+                        "点此设置轻提醒"
+                    },
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onOpenSettings,
+            )
 
             if (showTodayLogs) {
                 TodayActivityCard(
