@@ -771,7 +771,7 @@ class HomeViewModel(
         }
     }
 
-    /** 把当前卡片加入相册。刷卡流只做 App 内归类，避免系统写入弹窗打断连续整理。 */
+    /** 把当前卡片加入相册。刷卡流只记录归类，避免系统写入弹窗打断连续整理。 */
     fun addCurrentToAlbum(albumId: Long) {
         val asset = _uiState.value.current ?: return
         val albumName = _uiState.value.albums.firstOrNull { it.id == albumId }?.name ?: "相册"

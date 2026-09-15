@@ -256,8 +256,8 @@ private fun PermissionScreen(onRequest: () -> Unit) {
             )
             PermissionTip(
                 icon = Icons.Default.Security,
-                title = "相册先用 App 内标签",
-                body = "加入相册不会移动系统文件，后续需要同步系统相册时再单独开启。",
+                title = "相册整理可撤回",
+                body = "加入或移出相册不会删除照片，真正删除前会单独确认。",
             )
             Spacer(Modifier.height(8.dp))
         }

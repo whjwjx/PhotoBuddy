@@ -81,7 +81,6 @@ fun AlbumsScreen() {
     var query by remember { mutableStateOf("") }
     var renameTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var deleteTarget by remember { mutableStateOf<AlbumEntity?>(null) }
-    var mappingTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var mergeTarget by remember { mutableStateOf<AlbumEntity?>(null) }
     var previewTarget by remember { mutableStateOf<MediaAsset?>(null) }
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
@@ -139,7 +138,6 @@ fun AlbumsScreen() {
                 onRename = { renameTarget = it },
                 onDelete = { deleteTarget = it },
                 onMerge = { mergeTarget = it },
-                onShowMapping = { mappingTarget = it },
                 onTogglePin = { albumId, pinned -> vm.setAlbumPinned(albumId, pinned) },
                 onToggleHidden = { albumId, hidden -> vm.setAlbumHidden(albumId, hidden) },
                 modifier = Modifier.padding(padding),
@@ -218,13 +216,6 @@ fun AlbumsScreen() {
         )
     }
 
-    mappingTarget?.let { album ->
-        AlbumMappingDialog(
-            album = album,
-            onDismiss = { mappingTarget = null },
-        )
-    }
-
     mergeTarget?.let { album ->
         MergeAlbumDialog(
             album = album,
@@ -252,7 +243,6 @@ private fun AlbumList(
     onRename: (AlbumEntity) -> Unit,
     onDelete: (AlbumEntity) -> Unit,
     onMerge: (AlbumEntity) -> Unit,
-    onShowMapping: (AlbumEntity) -> Unit,
     onTogglePin: (Long, Boolean) -> Unit,
     onToggleHidden: (Long, Boolean) -> Unit,
     modifier: Modifier = Modifier,
@@ -269,23 +259,8 @@ private fun AlbumList(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("App 内标签", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "这些相册用于整理流快速归类，不会移动系统相册里的文件；置顶和最近使用会影响整理页快捷区。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    AlbumModePill("当前类型", "App 标签", modifier = Modifier.weight(1f))
-                    AlbumModePill("系统同步", "暂未开启", modifier = Modifier.weight(1f))
-                }
-            }
-        }
-
-        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("新建 App 标签", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("新建相册", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -293,7 +268,7 @@ private fun AlbumList(
                     OutlinedTextField(
                         value = draftName,
                         onValueChange = onDraftChange,
-                        label = { Text("标签名称") },
+                        label = { Text("相册名称") },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
@@ -303,7 +278,7 @@ private fun AlbumList(
                 }
                 if (hasSameNameAlbum) {
                     Text(
-                        "已有同名标签，可以直接打开使用。",
+                        "已有同名相册，可以直接打开使用。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -365,7 +340,6 @@ private fun AlbumList(
                         onRename = { onRename(album) },
                         onDelete = { onDelete(album) },
                         onMerge = { onMerge(album) },
-                        onShowMapping = { onShowMapping(album) },
                         onTogglePin = { onTogglePin(album.id, album.id !in state.pinnedAlbumIds) },
                         onToggleHidden = { onToggleHidden(album.id, album.id !in state.hiddenAlbumIds) },
                     )
@@ -409,7 +383,6 @@ private fun AlbumRow(
     onRename: () -> Unit,
     onDelete: () -> Unit,
     onMerge: () -> Unit,
-    onShowMapping: () -> Unit,
     onTogglePin: () -> Unit,
     onToggleHidden: () -> Unit,
 ) {
@@ -442,7 +415,6 @@ private fun AlbumRow(
                         append("$count 项")
                         if (pinned) append(" · 已置顶")
                         if (hidden) append(" · 已隐藏于快捷区")
-                        append(" · App 内标签")
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -488,13 +460,6 @@ private fun AlbumRow(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("同步说明") },
-                        onClick = {
-                            menuExpanded = false
-                            onShowMapping()
-                        },
-                    )
-                    DropdownMenuItem(
                         text = { Text("删除相册") },
                         onClick = {
                             menuExpanded = false
@@ -504,33 +469,6 @@ private fun AlbumRow(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun AlbumModePill(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier =
-            modifier
-                .background(
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
-                    RoundedCornerShape(8.dp),
-                )
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(value, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -584,7 +522,7 @@ private fun AlbumDetail(
                     Text("${items.size} 项", style = MaterialTheme.typography.titleMedium)
                     Text(
                         if (selectedIds.isEmpty()) {
-                            "App 内标签，移出不会删除原照片"
+                            "移出相册不会删除原照片"
                         } else {
                             "已选 ${selectedIds.size} 项"
                         },
@@ -754,7 +692,7 @@ private fun AlbumMediaPreviewDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "移出只会取消 App 内归类，不会删除或移动系统照片文件。",
+                    "移出只会取消归类，不会删除照片文件。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -788,7 +726,7 @@ private fun EmptyAlbumSearch(query: String) {
         Text("没有找到「$query」", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
-            "可以换个关键词，或者用上方输入框新建标签。",
+            "可以换个关键词，或者用上方输入框新建相册。",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
         )
@@ -802,10 +740,10 @@ private fun EmptyAlbums() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("还没有标签", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text("还没有相册", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
-            "在整理页加入标签，或者先创建一个常用分类。",
+            "在整理页加入相册，或者先创建一个常用分类。",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
         )
@@ -841,7 +779,7 @@ private fun EmptyAlbum(
         Text("「$albumName」暂无内容", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
-            "去整理页把照片加入这个标签。",
+            "去整理页把照片加入这个相册。",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
         )
@@ -862,19 +800,19 @@ private fun RenameAlbumDialog(
             albums.any { it.id != album.id && it.name.equals(trimmedName, ignoreCase = true) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("重命名标签") },
+        title = { Text("重命名相册") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("标签名称") },
+                    label = { Text("相册名称") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (hasSameNameAlbum) {
                     Text(
-                        "已有同名标签，请换一个名称。",
+                        "已有同名相册，请换一个名称。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -908,7 +846,7 @@ private fun MergeAlbumDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "会把 $count 条 App 内归类记录合并到目标相册，然后删除「${album.name}」。不会移动或删除系统照片文件。",
+                    "会把 $count 条归类记录合并到目标相册，然后删除「${album.name}」。不会删除照片文件。",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 if (targetAlbums.isEmpty()) {
@@ -948,28 +886,6 @@ private fun MergeAlbumDialog(
 }
 
 @Composable
-private fun AlbumMappingDialog(
-    album: AlbumEntity,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("相册同步说明") },
-        text = {
-            Text(
-                "「${album.name}」目前是 App 内标签。加入、移出或删除这个相册，只会改变本 App 的归类记录，" +
-                    "不会移动、复制或删除系统相册里的照片文件。置顶只影响整理页底部快捷区。",
-            )
-        },
-        confirmButton = {
-            Button(onClick = onDismiss) {
-                Text("知道了")
-            }
-        },
-    )
-}
-
-@Composable
 private fun DeleteAlbumDialog(
     album: AlbumEntity,
     count: Int,
@@ -980,7 +896,7 @@ private fun DeleteAlbumDialog(
         onDismissRequest = onDismiss,
         title = { Text("删除相册？") },
         text = {
-            Text("只删除「${album.name}」这个 App 内相册和其中 $count 条归类记录，不会删除照片文件。")
+            Text("只删除「${album.name}」这个相册和其中 $count 条归类记录，不会删除照片文件。")
         },
         confirmButton = {
             Button(onClick = onConfirm) {

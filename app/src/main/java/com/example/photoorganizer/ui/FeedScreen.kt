@@ -258,6 +258,7 @@ fun FeedScreen(
                 }
                 AssetCaption(asset = asset)
                 ActionBar(
+                    similarMode = showSimilarComparison,
                     onTrash = { vm.act(MediaStatus.TRASH) },
                     onKeep = { vm.act(MediaStatus.KEEP) },
                     onLater = { vm.act(MediaStatus.LATER) },
@@ -550,7 +551,7 @@ private fun SimilarComparisonStrip(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "左右滑动或点缩略图对比，按钮处理当前候选。",
+                    "左右滑动或点缩略图对比，可单张处理或批量处理本组。",
                     color = Color.White.copy(alpha = 0.72f),
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
@@ -578,7 +579,7 @@ private fun SimilarComparisonStrip(
                     Text("本组稍后", color = Color.White)
                 }
                 TextButton(onClick = onKeepCurrent) {
-                    Text("留当前", color = Color.White)
+                    Text("留当前，待删其余", color = Color.White)
                 }
             }
         }
@@ -908,7 +909,7 @@ private fun undoVisual(message: String): UndoVisual =
         message.contains("收藏") ->
             UndoVisual(Color(0xFFFFCC00), "已从未整理中移出")
         message.contains("相册") ->
-            UndoVisual(Color(0xFF0A84FF), "App 内归类，不移动系统文件")
+            UndoVisual(Color(0xFF0A84FF), "已加入相册")
         else ->
             UndoVisual(Color(0xFF34C759), "继续下一张")
     }
@@ -967,6 +968,7 @@ private fun AssetCaption(asset: MediaAsset) {
 
 @Composable
 private fun ActionBar(
+    similarMode: Boolean,
     onTrash: () -> Unit,
     onKeep: () -> Unit,
     onLater: () -> Unit,
@@ -990,16 +992,16 @@ private fun ActionBar(
         )
         FeedAction(
             icon = Icons.Default.Schedule,
-            label = "稍后",
-            helper = "左滑",
+            label = if (similarMode) "当前稍后" else "稍后",
+            helper = if (similarMode) "单张" else "左滑",
             accent = Color(0xFF8E8E93),
             modifier = Modifier.weight(1f),
             onClick = onLater,
         )
         FeedAction(
             icon = Icons.Default.Check,
-            label = "保留",
-            helper = "右滑",
+            label = if (similarMode) "当前保留" else "保留",
+            helper = if (similarMode) "单张" else "右滑",
             accent = Color(0xFF34C759),
             modifier = Modifier.weight(1f),
             onClick = onKeep,
@@ -1053,7 +1055,7 @@ private fun AlbumQuickBar(
             }
             item {
                 AlbumChip(
-                    text = if (state.albums.isEmpty()) "新建标签" else "更多标签",
+                    text = if (state.albums.isEmpty()) "新建相册" else "更多相册",
                     icon = if (state.albums.isEmpty()) Icons.Default.Add else Icons.Default.MoreHoriz,
                     onClick = onMore,
                 )
@@ -1161,7 +1163,6 @@ private fun AlbumActionSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var draftName by remember(album.id, album.name) { mutableStateOf(album.name) }
-    var showMapping by remember { mutableStateOf(false) }
     val trimmedName = draftName.trim()
     val hasSameNameAlbum =
         trimmedName.isNotEmpty() &&
@@ -1179,20 +1180,20 @@ private fun AlbumActionSheet(
         ) {
             Text(album.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
-                "$count 项 · App 内标签",
+                "$count 项",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedTextField(
                 value = draftName,
                 onValueChange = { draftName = it },
-                label = { Text("标签名称") },
+                label = { Text("相册名称") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             if (hasSameNameAlbum) {
                 Text(
-                    "已有同名标签，请换一个名称。",
+                    "已有同名相册，请换一个名称。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -1214,12 +1215,6 @@ private fun AlbumActionSheet(
                 Text(if (pinned) "取消置顶" else "置顶到快捷区")
             }
             TextButton(
-                onClick = { showMapping = true },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("同步说明")
-            }
-            TextButton(
                 onClick = {
                     onToggleHidden()
                     onDismiss()
@@ -1235,23 +1230,6 @@ private fun AlbumActionSheet(
             )
             Spacer(Modifier.height(12.dp))
         }
-    }
-    if (showMapping) {
-        AlertDialog(
-            onDismissRequest = { showMapping = false },
-            title = { Text("相册同步说明") },
-            text = {
-                Text(
-                    "「${album.name}」目前是 App 内标签。加入、移出或删除这个相册，只会改变本 App 的归类记录，" +
-                        "不会移动、复制或删除系统相册里的照片文件。置顶只影响整理页底部快捷区。",
-                )
-            },
-            confirmButton = {
-                Button(onClick = { showMapping = false }) {
-                    Text("知道了")
-                }
-            },
-        )
     }
 }
 
@@ -1304,9 +1282,9 @@ private fun AlbumPickerSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("加入 App 标签", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("加入相册", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(
-                    "App 内标签，不移动系统文件",
+                    "点相册后继续整理下一张",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1314,7 +1292,7 @@ private fun AlbumPickerSheet(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                label = { Text("搜索或新建标签") },
+                label = { Text("搜索或新建相册") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -1327,13 +1305,13 @@ private fun AlbumPickerSheet(
                 }
             } else if (trimmedQuery.isNotEmpty()) {
                 Text(
-                    "已有同名标签，点下方结果加入。",
+                    "已有同名相册，点下方结果加入。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
                 Text(
-                    "输入名称可直接创建，点标签会立即归类当前照片。",
+                    "输入名称可直接创建，点相册会立即归类当前照片。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1341,7 +1319,7 @@ private fun AlbumPickerSheet(
             if (trimmedQuery.isBlank() && albums.isEmpty()) {
                 AlbumSheetSectionTitle("快速开始", starterTags.size)
                 Text(
-                    "点一个常用标签，会立即创建并归类当前照片。",
+                    "点一个常用相册，会立即创建并归类当前照片。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1356,7 +1334,7 @@ private fun AlbumPickerSheet(
                 }
             }
             if (trimmedQuery.isBlank() && pinnedAlbums.isNotEmpty()) {
-                AlbumSheetSectionTitle("置顶标签", pinnedAlbums.size)
+                AlbumSheetSectionTitle("置顶相册", pinnedAlbums.size)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(pinnedAlbums, key = { it.id }) { album ->
                         AlbumSheetChip(
@@ -1382,15 +1360,15 @@ private fun AlbumPickerSheet(
                 }
             }
             AlbumSheetSectionTitle(
-                title = if (trimmedQuery.isBlank()) "全部标签" else "搜索结果",
+                title = if (trimmedQuery.isBlank()) "全部相册" else "搜索结果",
                 count = filtered.size,
             )
             if (filtered.isEmpty()) {
                 Text(
                     if (albums.isEmpty()) {
-                        "还没有标签，可以先新建一个。"
+                        "还没有相册，可以先新建一个。"
                     } else {
-                        "没有匹配的标签。"
+                        "没有匹配的相册。"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -1481,7 +1459,6 @@ private fun albumSheetMeta(
         if (pinned) append(" · 置顶")
         if (hidden) append(" · 已隐藏")
         if (recent > 0L) append(" · 最近 ${formatDate(recent)}")
-        append(" · App 内标签")
     }
 
 private fun similarMeta(asset: MediaAsset): String =

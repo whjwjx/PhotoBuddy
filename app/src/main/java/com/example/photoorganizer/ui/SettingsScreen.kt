@@ -211,8 +211,8 @@ fun SettingsScreen() {
 
             SettingsCard(title = "系统影响边界") {
                 SettingsPlainRow(
-                    title = "App 标签归类",
-                    body = "当前创建的是 App 内标签，不移动、复制或删除系统相册文件。",
+                    title = "相册归类",
+                    body = "加入或移出相册不会删除照片文件。",
                 )
                 SettingsPlainRow(
                     title = "删除照片",
@@ -220,14 +220,14 @@ fun SettingsScreen() {
                 )
                 SettingsPlainRow(
                     title = "一键还原",
-                    body = "只还原 App 内整理状态，无法恢复已经被系统确认删除的真实文件。",
+                    body = "只还原本应用整理状态，无法恢复已经被系统确认删除的真实文件。",
                 )
             }
 
             if (isDebuggable) {
                 SettingsCard(title = "测试工具") {
                     Text(
-                        "清空整理状态、待删除、App 标签归类、操作记录和今日计数；不影响系统相册文件。",
+                        "清空整理状态、待删除、相册归类、操作记录和今日计数；不影响系统相册文件。",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -245,7 +245,7 @@ fun SettingsScreen() {
             title = { Text("还原测试状态？") },
             text = {
                 Text(
-                    "这会让照片重新回到未整理队列，并清空 App 内待删除、标签归类和测试记录。" +
+                    "这会让照片重新回到未整理队列，并清空待删除、相册归类和测试记录。" +
                         "已经通过系统确认删除的文件不会恢复。",
                 )
             },
