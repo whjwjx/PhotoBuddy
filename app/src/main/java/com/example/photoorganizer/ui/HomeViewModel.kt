@@ -36,7 +36,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 private const val DAY_MS = 24L * 60 * 60 * 1000
-private const val UNDO_VISIBLE_MS = 6_000L
+private const val UNDO_VISIBLE_MS = 3_000L
 
 data class UndoItem(
     val mediaId: Long,
