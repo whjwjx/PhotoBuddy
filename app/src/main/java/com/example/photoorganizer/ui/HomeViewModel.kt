@@ -38,6 +38,15 @@ import kotlinx.coroutines.launch
 private const val DAY_MS = 24L * 60 * 60 * 1000
 private const val UNDO_VISIBLE_MS = 6_000L
 
+data class UndoItem(
+    val mediaId: Long,
+    val mediaName: String,
+    val mediaType: String,
+    val beforeStatus: String?,
+    val albumId: Long? = null,
+    val albumItemAdded: Boolean = false,
+)
+
 data class UndoState(
     val mediaId: Long,
     val mediaName: String,
@@ -45,9 +54,25 @@ data class UndoState(
     val beforeStatus: String?,
     val albumId: Long? = null,
     val albumItemAdded: Boolean = false,
+    val items: List<UndoItem> = emptyList(),
     val message: String,
     val createdAt: Long,
-)
+) {
+    val undoItems: List<UndoItem>
+        get() =
+            items.ifEmpty {
+                listOf(
+                    UndoItem(
+                        mediaId = mediaId,
+                        mediaName = mediaName,
+                        mediaType = mediaType,
+                        beforeStatus = beforeStatus,
+                        albumId = albumId,
+                        albumItemAdded = albumItemAdded,
+                    ),
+                )
+            }
+}
 
 data class HomeUiState(
     val isScanning: Boolean = false,
@@ -294,6 +319,27 @@ class HomeViewModel(
         val targets = s.queueItems.filter { QueueEngine.isSimilarGroupPeer(current, it) }
         if (targets.isEmpty()) return
         viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val undoItems =
+                targets.map { asset ->
+                    UndoItem(
+                        mediaId = asset.id,
+                        mediaName = asset.displayName,
+                        mediaType = asset.mediaType.name,
+                        beforeStatus = dao.get(asset.id)?.status.orEmpty().ifEmpty { null },
+                    )
+                }
+            val undo =
+                UndoState(
+                    mediaId = current.id,
+                    mediaName = "${targets.size} 张相似照片",
+                    mediaType = current.mediaType.name,
+                    beforeStatus = null,
+                    items = undoItems,
+                    message = "本组已标记稍后",
+                    createdAt = now,
+                )
+            _uiState.update { it.copy(undo = undo, feedbackMessage = undo.message) }
             targets.forEach { asset ->
                 val before = dao.get(asset.id)?.status.orEmpty()
                 dao.upsert(toEntity(asset, MediaStatus.LATER))
@@ -307,16 +353,23 @@ class HomeViewModel(
                         beforeState = before,
                         afterState = MediaStatus.LATER.value,
                         freedBytes = 0L,
-                        createdAt = System.currentTimeMillis(),
+                        createdAt = now,
                     ),
                 )
             }
             settingsRepo.addProcessed(targets.size)
+            clearFeedbackAfterDelay(undo)
             _uiState.update { state ->
+                val targetIds = targets.map { it.id }.toSet()
+                val updatedStatuses =
+                    state.statuses.filterNot { it.localAssetId in targetIds } +
+                        targets.map { toEntity(it, MediaStatus.LATER) }
                 recompute(
                     state.copy(
+                        statuses = updatedStatuses,
                         processedCount = state.processedCount + targets.size,
-                        undo = null,
+                        undo = undo,
+                        feedbackMessage = undo.message,
                     ),
                 )
             }
@@ -401,52 +454,59 @@ class HomeViewModel(
 
     fun undoLast() {
         val undo = _uiState.value.undo ?: return
-        val asset = _uiState.value.allAssets.firstOrNull { it.id == undo.mediaId } ?: return
+        val undoItems = undo.undoItems
+        if (undoItems.isEmpty()) return
         viewModelScope.launch {
-            val restoredStatus =
-                undo.beforeStatus
-                    ?.takeIf { it.isNotEmpty() }
-                    ?.let {
-                        MediaStatusEntity(
-                            localAssetId = undo.mediaId,
-                            mediaType = undo.mediaType,
-                            status = it,
-                            updatedAt = System.currentTimeMillis(),
-                        )
-                    }
-            if (restoredStatus == null) {
-                dao.deleteByIds(listOf(undo.mediaId))
-            } else {
-                dao.upsert(restoredStatus)
+            val now = System.currentTimeMillis()
+            val restoredStatuses =
+                undoItems.mapNotNull { item ->
+                    item.beforeStatus
+                        ?.takeIf { it.isNotEmpty() }
+                        ?.let {
+                            MediaStatusEntity(
+                                localAssetId = item.mediaId,
+                                mediaType = item.mediaType,
+                                status = it,
+                                updatedAt = now,
+                            )
+                        }
+                }
+            val restoredById = restoredStatuses.associateBy { it.localAssetId }
+            undoItems.forEach { item ->
+                val restoredStatus = restoredById[item.mediaId]
+                if (restoredStatus == null) {
+                    dao.deleteByIds(listOf(item.mediaId))
+                } else {
+                    dao.upsert(restoredStatus)
+                }
+                if (item.albumId != null && item.albumItemAdded) {
+                    albumDao.removeItem(item.albumId, item.mediaId)
+                }
+                logDao.insert(
+                    UserActionLogEntity(
+                        mediaId = item.mediaId,
+                        mediaName = item.mediaName,
+                        mediaType = item.mediaType,
+                        action = "undo",
+                        source = _uiState.value.queueSource,
+                        beforeState = _uiState.value.statusById[item.mediaId].orEmpty(),
+                        afterState = restoredStatus?.status.orEmpty(),
+                        createdAt = now,
+                    ),
+                )
             }
-            if (undo.albumId != null && undo.albumItemAdded) {
-                albumDao.removeItem(undo.albumId, undo.mediaId)
-            }
-            logDao.insert(
-                UserActionLogEntity(
-                    mediaId = asset.id,
-                    mediaName = asset.displayName,
-                    mediaType = asset.mediaType.name,
-                    action = "undo",
-                    source = _uiState.value.queueSource,
-                    beforeState = _uiState.value.statusById[asset.id].orEmpty(),
-                    afterState = restoredStatus?.status.orEmpty(),
-                    createdAt = System.currentTimeMillis(),
-                ),
-            )
-            settingsRepo.addProcessed(-1)
+            settingsRepo.addProcessed(-undoItems.size)
             _uiState.update { s ->
+                val undoIds = undoItems.map { it.mediaId }.toSet()
                 val statuses =
-                    if (restoredStatus == null) {
-                        s.statuses.filterNot { it.localAssetId == undo.mediaId }
-                    } else {
-                        s.statuses.filterNot { it.localAssetId == undo.mediaId } + restoredStatus
-                    }
+                    s.statuses
+                        .filterNot { it.localAssetId in undoIds } +
+                        restoredStatuses
                 val updated =
                     recompute(
                         s.copy(
                             statuses = statuses,
-                            processedCount = (s.processedCount - 1).coerceAtLeast(0),
+                            processedCount = (s.processedCount - undoItems.size).coerceAtLeast(0),
                             undo = null,
                             feedbackMessage = null,
                         ),
