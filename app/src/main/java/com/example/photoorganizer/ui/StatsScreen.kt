@@ -103,6 +103,7 @@ fun StatsScreen(
                     QueueType.LATER,
                     QueueType.SIMILAR,
                     QueueType.ON_THIS_DAY,
+                    QueueType.ALBUM,
                     QueueType.SCREENSHOT,
                     QueueType.LARGE_VIDEO,
                     QueueType.RECENT_30,
@@ -416,12 +417,19 @@ private fun queueProgressTotal(
             }
         }
         QueueType.SIMILAR -> null
+        QueueType.ALBUM -> albumQueueTotal(queue, state)
         QueueType.MONTH -> monthQueueTotal(queue, state)
         QueueType.FAVORITE ->
             state.assets.count { asset ->
                 asset.isFavorite || state.statusById[asset.id] == MediaStatus.FAVORITE.value
             }
     }
+
+private fun albumQueueTotal(
+    queue: MediaQueue,
+    state: HomeUiState,
+): Int =
+    state.assets.count { asset -> asset.bucketName.ifBlank { "未知相册" } == queue.title }
 
 private fun monthQueueTotal(
     queue: MediaQueue,

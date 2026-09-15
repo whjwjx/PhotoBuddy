@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.ImageSearch
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.PhotoAlbum
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Today
@@ -406,6 +407,7 @@ private fun QueueGrid(
                                 QueueType.LARGE_VIDEO -> Icons.Default.Movie
                                 QueueType.RECENT_30 -> Icons.Default.Today
                                 QueueType.ON_THIS_DAY -> Icons.Default.Today
+                                QueueType.ALBUM -> Icons.Default.PhotoAlbum
                                 QueueType.LATER -> Icons.Default.Schedule
                                 QueueType.FAVORITE -> Icons.Default.AutoAwesome
                                 else -> Icons.Default.PhotoLibrary
@@ -434,8 +436,9 @@ private fun buildHomeQueues(queues: List<MediaQueue>): List<MediaQueue> {
             QueueType.FAVORITE,
         )
     val preferred = priority.mapNotNull { type -> queues.firstOrNull { it.type == type } }
+    val albumQueues = queues.filter { it.type == QueueType.ALBUM && it.items.isNotEmpty() }
     val monthQueues = queues.filter { it.type == QueueType.MONTH && it.items.isNotEmpty() }
-    return (preferred.filter { it.items.isNotEmpty() } + monthQueues + preferred)
+    return (preferred.filter { it.items.isNotEmpty() } + albumQueues + monthQueues + preferred)
         .distinctBy { it.type to it.title }
 }
 
@@ -517,6 +520,7 @@ private fun queueBadge(queue: MediaQueue): String =
             QueueType.LARGE_VIDEO -> "空间"
             QueueType.RECENT_30 -> "新增"
             QueueType.ON_THIS_DAY -> "回忆"
+            QueueType.ALBUM -> "相册"
             QueueType.LATER -> "回看"
             QueueType.FAVORITE -> "收藏"
             QueueType.MONTH -> "回顾"
@@ -535,6 +539,7 @@ private fun queueHelper(queue: MediaQueue): String =
             QueueType.LARGE_VIDEO -> "优先查看大文件"
             QueueType.RECENT_30 -> "整理最近新增"
             QueueType.ON_THIS_DAY -> "回看往年今天"
+            QueueType.ALBUM -> "按相册继续整理"
             QueueType.LATER -> "继续处理稍后照片"
             QueueType.FAVORITE -> "回看收藏照片"
             QueueType.MONTH -> "按月份回看"

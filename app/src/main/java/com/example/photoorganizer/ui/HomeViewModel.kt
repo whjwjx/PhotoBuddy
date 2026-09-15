@@ -319,6 +319,27 @@ class HomeViewModel(
         }
     }
 
+    /** 从系统相册来源启动整理，复用 Slidebox 的 Album Organization 入口。 */
+    fun selectSystemAlbumQueue(
+        bucketKey: String,
+        bucketName: String,
+    ) {
+        if (bucketKey.isBlank()) return
+        val title = bucketName.ifBlank { "未知相册" }
+        _uiState.update { s ->
+            recompute(
+                s.copy(
+                    filterType = null,
+                    filterBucket = bucketKey,
+                    queueType = QueueType.ALBUM,
+                    queueTitle = title,
+                    currentIndex = 0,
+                    feedbackMessage = null,
+                ),
+            )
+        }
+    }
+
     /** 用户对当前卡片的决策。删除在 Slidebox 模型里只进入 App 内待删除区。 */
     fun act(status: MediaStatus) {
         val nextStatus = if (status == MediaStatus.DELETE) MediaStatus.TRASH else status

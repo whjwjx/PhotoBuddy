@@ -347,6 +347,7 @@ private fun queueRowPurpose(queue: MediaQueue): String =
     when (queue.type) {
         QueueType.RANDOM -> "快速进入下一张判断"
         QueueType.ON_THIS_DAY -> "回看往年今天的照片"
+        QueueType.ALBUM -> "从某个系统相册继续整理"
         QueueType.UNPROCESSED -> "查看所有还没处理的内容"
         QueueType.LATER -> "继续之前暂放的照片"
         QueueType.SIMILAR -> "横向对比同组相近照片"
@@ -361,12 +362,13 @@ private fun queuePriority(queue: MediaQueue): Int =
     when (queue.type) {
         QueueType.RANDOM -> 0
         QueueType.ON_THIS_DAY -> 1
-        QueueType.UNPROCESSED -> 2
-        QueueType.LATER -> 3
-        QueueType.SIMILAR -> 4
-        QueueType.SCREENSHOT -> 5
-        QueueType.LARGE_VIDEO -> 6
-        QueueType.RECENT_30 -> 7
-        QueueType.FAVORITE -> 8
-        QueueType.MONTH -> 9
+        QueueType.ALBUM -> 2
+        QueueType.UNPROCESSED -> 3
+        QueueType.LATER -> 4
+        QueueType.SIMILAR -> 5
+        QueueType.SCREENSHOT -> 6
+        QueueType.LARGE_VIDEO -> 7
+        QueueType.RECENT_30 -> 8
+        QueueType.FAVORITE -> 9
+        QueueType.MONTH -> 10
     }

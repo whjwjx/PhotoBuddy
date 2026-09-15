@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoAlbum
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.Search
@@ -70,6 +71,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.photoorganizer.data.MediaAsset
 import com.example.photoorganizer.data.local.AlbumEntity
+import com.example.photoorganizer.data.local.MediaStatus
 
 private val STARTER_ALBUM_NAMES = listOf("家人", "朋友", "旅行", "资料", "美食", "截图")
 
@@ -77,12 +79,19 @@ private data class SystemAlbumOption(
     val key: String,
     val name: String,
     val count: Int,
+    val pendingCount: Int,
 )
 
 /** 应用内相册页：负责查看、重命名、删除相册，以及从相册中批量移除媒体。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumsScreen() {
+    AlbumsScreen(onStartOrganize = {})
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AlbumsScreen(onStartOrganize: () -> Unit) {
     val vm: HomeViewModel = viewModel()
     val state by vm.uiState.collectAsState()
     var name by remember { mutableStateOf("") }
@@ -98,7 +107,8 @@ fun AlbumsScreen() {
             ?.let { album -> state.openAlbumMediaIds.mapNotNull { id -> state.allAssets.firstOrNull { it.id == id } } }
             .orEmpty()
     val systemAlbumOptions =
-        remember(state.allAssets) {
+        remember(state.allAssets, state.statusById) {
+            val blockedStatuses = setOf(MediaStatus.TRASH.value, MediaStatus.DELETE.value)
             state.allAssets
                 .groupBy { asset -> asset.bucketId.ifBlank { asset.bucketName.ifBlank { "unknown" } } }
                 .map { (key, assets) ->
@@ -106,9 +116,18 @@ fun AlbumsScreen() {
                         key = key,
                         name = assets.firstOrNull()?.bucketName?.ifBlank { "未知相册" } ?: "未知相册",
                         count = assets.size,
+                        pendingCount =
+                            assets.count { asset ->
+                                val status = state.statusById[asset.id].orEmpty()
+                                status.isBlank() && status !in blockedStatuses
+                            },
                     )
                 }
-                .sortedWith(compareByDescending<SystemAlbumOption> { it.count }.thenBy { it.name })
+                .sortedWith(
+                    compareByDescending<SystemAlbumOption> { it.pendingCount }
+                        .thenByDescending { it.count }
+                        .thenBy { it.name },
+                )
         }
 
     LaunchedEffect(openAlbum?.id, openItems.map { it.id }) {
@@ -162,6 +181,10 @@ fun AlbumsScreen() {
                 onMerge = { mergeTarget = it },
                 onTogglePin = { albumId, pinned -> vm.setAlbumPinned(albumId, pinned) },
                 onToggleHidden = { albumId, hidden -> vm.setAlbumHidden(albumId, hidden) },
+                onOrganizeSystemAlbum = { option ->
+                    vm.selectSystemAlbumQueue(option.key, option.name)
+                    onStartOrganize()
+                },
                 onImportSystemAlbum = { option -> vm.importSystemAlbum(option.key, option.name) },
                 modifier = Modifier.padding(padding),
             )
@@ -269,6 +292,7 @@ private fun AlbumList(
     onMerge: (AlbumEntity) -> Unit,
     onTogglePin: (Long, Boolean) -> Unit,
     onToggleHidden: (Long, Boolean) -> Unit,
+    onOrganizeSystemAlbum: (SystemAlbumOption) -> Unit,
     onImportSystemAlbum: (SystemAlbumOption) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -370,6 +394,10 @@ private fun AlbumList(
     if (showSystemAlbumPicker) {
         SystemAlbumImportDialog(
             options = systemAlbumOptions,
+            onOrganize = { option ->
+                onOrganizeSystemAlbum(option)
+                showSystemAlbumPicker = false
+            },
             onImport = { option ->
                 onImportSystemAlbum(option)
                 showSystemAlbumPicker = false
@@ -476,6 +504,7 @@ private fun AlbumManagementSummary(
 @Composable
 private fun SystemAlbumImportDialog(
     options: List<SystemAlbumOption>,
+    onOrganize: (SystemAlbumOption) -> Unit,
     onImport: (SystemAlbumOption) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -497,14 +526,15 @@ private fun SystemAlbumImportDialog(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         items(options, key = { it.key }) { option ->
+                            val canOrganize = option.pendingCount > 0
                             Row(
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(8.dp))
-                                        .clickable { onImport(option) }
                                         .padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(
@@ -515,14 +545,28 @@ private fun SystemAlbumImportDialog(
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                     Text(
-                                        "${option.count} 项 · 导入为 App 内相册",
+                                        "${option.count} 项 · ${option.pendingCount} 项待整理 · 可导入为 App 内相册",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                 }
-                                Text("导入", color = MaterialTheme.colorScheme.primary)
+                                TextButton(
+                                    onClick = { onOrganize(option) },
+                                    enabled = canOrganize,
+                                ) {
+                                    Icon(
+                                        Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(Modifier.width(2.dp))
+                                    Text("整理")
+                                }
+                                TextButton(onClick = { onImport(option) }) {
+                                    Text("导入")
+                                }
                             }
                         }
                     }

@@ -13,6 +13,7 @@ enum class QueueType(val label: String) {
     SIMILAR("相似照片"),
     RECENT_30("最近 30 天"),
     ON_THIS_DAY("往年今日"),
+    ALBUM("按相册"),
     MONTH("按月份"),
     UNPROCESSED("未整理"),
     LATER("稍后"),
@@ -68,6 +69,15 @@ object QueueEngine {
         out += queue(QueueType.UNPROCESSED, "", unprocessed)
         out += queue(QueueType.LATER, "", later)
         out += queue(QueueType.FAVORITE, "", favorites)
+
+        unprocessed
+            .groupBy { albumKey(it) }
+            .values
+            .sortedWith(
+                compareByDescending<List<MediaAsset>> { it.size }
+                    .thenBy { albumTitle(it.firstOrNull()) },
+            )
+            .forEach { items -> out += queue(QueueType.ALBUM, albumTitle(items.firstOrNull()), items) }
 
         // 按月份拆分为多个队列，便于逐步整理历史相册（PRD 4.3 某个月份）
         unprocessed
@@ -131,6 +141,12 @@ object QueueEngine {
         val c = Calendar.getInstance().apply { timeInMillis = ms }
         return String.format(Locale.getDefault(), "%04d-%02d", c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1)
     }
+
+    private fun albumKey(asset: MediaAsset): String =
+        asset.bucketId.ifBlank { asset.bucketName.ifBlank { "unknown" } }
+
+    private fun albumTitle(asset: MediaAsset?): String =
+        asset?.bucketName?.ifBlank { null } ?: "未知相册"
 
     private data class SimilarBucket(
         val bucketId: String,

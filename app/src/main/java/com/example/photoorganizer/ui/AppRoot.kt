@@ -142,7 +142,7 @@ fun AppRoot(
                     onOpenTrash = { tab = AppTab.TRASH },
                 )
                 AppTab.TRASH -> TrashScreen(onExit = { tab = AppTab.HOME })
-                AppTab.ALBUMS -> AlbumsScreen()
+                AppTab.ALBUMS -> AlbumsScreen(onStartOrganize = { tab = AppTab.ORGANIZE })
                 AppTab.STATS -> StatsScreen(
                     onPickQueue = { tab = AppTab.ORGANIZE },
                     onOpenTrash = { tab = AppTab.TRASH },
