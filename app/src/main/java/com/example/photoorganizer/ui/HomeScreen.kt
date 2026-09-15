@@ -440,7 +440,24 @@ private fun QueueCard(
             ),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(icon, contentDescription = null)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(icon, contentDescription = null)
+                Text(
+                    queueBadge(queue),
+                    modifier =
+                        Modifier
+                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(100.dp))
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     queue.displayName,
@@ -468,16 +485,36 @@ private fun QueueCard(
     }
 }
 
+private fun queueBadge(queue: MediaQueue): String =
+    if (queue.items.isEmpty()) {
+        "完成"
+    } else {
+        when (queue.type) {
+            QueueType.RANDOM -> "推荐"
+            QueueType.UNPROCESSED -> "全部"
+            QueueType.SIMILAR -> "对比"
+            QueueType.SCREENSHOT -> "清理"
+            QueueType.LARGE_VIDEO -> "空间"
+            QueueType.RECENT_30 -> "新增"
+            QueueType.FAVORITE -> "收藏"
+            QueueType.MONTH -> "回顾"
+        }
+    }
+
 private fun queueHelper(queue: MediaQueue): String =
-    when (queue.type) {
-        QueueType.RANDOM -> "推荐入口"
-        QueueType.UNPROCESSED -> "完整未整理列表"
-        QueueType.SIMILAR -> "对比相近照片"
-        QueueType.SCREENSHOT -> "快速清理截图"
-        QueueType.LARGE_VIDEO -> "优先查看大文件"
-        QueueType.RECENT_30 -> "最近新增照片"
-        QueueType.FAVORITE -> "系统收藏内容"
-        QueueType.MONTH -> "按月份回看"
+    if (queue.items.isEmpty()) {
+        "这个队列已整理完"
+    } else {
+        when (queue.type) {
+            QueueType.RANDOM -> "从一组轻量判断开始"
+            QueueType.UNPROCESSED -> "完整未整理列表"
+            QueueType.SIMILAR -> "对比相近照片"
+            QueueType.SCREENSHOT -> "快速清理截图"
+            QueueType.LARGE_VIDEO -> "优先查看大文件"
+            QueueType.RECENT_30 -> "整理最近新增"
+            QueueType.FAVORITE -> "回看系统收藏"
+            QueueType.MONTH -> "按月份回看"
+        }
     }
 
 private fun queueMeta(queue: MediaQueue): String =
