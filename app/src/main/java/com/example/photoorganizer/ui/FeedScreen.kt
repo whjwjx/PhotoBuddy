@@ -1,6 +1,7 @@
 package com.example.photoorganizer.ui
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -139,6 +140,9 @@ fun FeedScreen(
         } else {
             onExit()
         }
+    }
+    BackHandler {
+        requestExit()
     }
     LaunchedEffect(initialQueueTypeName, state.queues) {
         val target = initialQueueTypeName?.takeIf { it.isNotBlank() }

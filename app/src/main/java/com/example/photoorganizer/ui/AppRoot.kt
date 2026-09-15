@@ -3,6 +3,7 @@ package com.example.photoorganizer.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -97,6 +98,9 @@ fun AppRoot(
     }
     LaunchedEffect(initialQueueRequestId, initialQueueTypeName) {
         pendingQueueTypeName = initialQueueTypeName
+    }
+    BackHandler(enabled = tab != AppTab.HOME && tab != AppTab.ORGANIZE) {
+        tab = AppTab.HOME
     }
     Scaffold(
         // 刷照片流是全屏沉浸式，隐藏底部导航
