@@ -286,6 +286,10 @@ fun FeedScreen(
             count = state.albumCounts[album.id] ?: 0,
             pinned = album.id in state.pinnedAlbumIds,
             hidden = album.id in state.hiddenAlbumIds,
+            onRename = { name ->
+                vm.renameAlbum(album.id, name)
+                albumActionTarget = null
+            },
             onTogglePin = { vm.setAlbumPinned(album.id, album.id !in state.pinnedAlbumIds) },
             onToggleHidden = { vm.setAlbumHidden(album.id, album.id !in state.hiddenAlbumIds) },
             onDismiss = { albumActionTarget = null },
@@ -1052,11 +1056,14 @@ private fun AlbumActionSheet(
     count: Int,
     pinned: Boolean,
     hidden: Boolean,
+    onRename: (String) -> Unit,
     onTogglePin: () -> Unit,
     onToggleHidden: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var draftName by remember(album.id, album.name) { mutableStateOf(album.name) }
+    val trimmedName = draftName.trim()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -1074,6 +1081,20 @@ private fun AlbumActionSheet(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            OutlinedTextField(
+                value = draftName,
+                onValueChange = { draftName = it },
+                label = { Text("相册名称") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = { onRename(trimmedName) },
+                enabled = trimmedName.isNotEmpty() && trimmedName != album.name,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("保存名称")
+            }
             Button(
                 onClick = {
                     onTogglePin()
@@ -1093,7 +1114,7 @@ private fun AlbumActionSheet(
                 Text(if (hidden) "显示在整理页" else "从整理页隐藏")
             }
             Text(
-                "短按相册会把当前照片加入这里；长按可调整快捷区显示。",
+                "短按相册会把当前照片加入这里；长按可改名、置顶或调整快捷区显示。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
