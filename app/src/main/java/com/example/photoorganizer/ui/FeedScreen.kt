@@ -1619,7 +1619,7 @@ private fun EmptyQueue(
         if (nextQueue == null) {
             "没有可继续的短队列。回首页复核待删除，或重新扫描后继续整理。"
         } else {
-            "下一组建议「${nextQueue.displayName}」：${nextQueue.items.size} 项" +
+            "建议继续「${nextQueue.displayName}」：${nextQueue.items.size} 项" +
                 if (nextQueue.estimatedSavingBytes > 0L) {
                     " · 合计 ${formatBytes(nextQueue.estimatedSavingBytes)}"
                 } else {
@@ -1649,7 +1649,7 @@ private fun EmptyQueue(
         Spacer(Modifier.height(20.dp))
         if (nextQueue != null) {
             Button(onClick = onNextQueue) {
-                Text("继续下一组")
+                Text("继续 ${nextQueue.displayName}")
             }
             Spacer(Modifier.height(8.dp))
         }
