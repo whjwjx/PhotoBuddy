@@ -519,7 +519,7 @@ private fun queueHelper(queue: MediaQueue): String =
             QueueType.LARGE_VIDEO -> "优先查看大文件"
             QueueType.RECENT_30 -> "整理最近新增"
             QueueType.LATER -> "继续处理稍后照片"
-            QueueType.FAVORITE -> "回看系统收藏"
+            QueueType.FAVORITE -> "回看收藏照片"
             QueueType.MONTH -> "按月份回看"
         }
     }

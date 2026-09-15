@@ -43,10 +43,12 @@ object QueueEngine {
         assets: List<MediaAsset>,
         processedIds: Set<Long> = emptySet(),
         laterIds: Set<Long> = emptySet(),
+        favoriteIds: Set<Long> = emptySet(),
     ): List<MediaQueue> {
         val now = System.currentTimeMillis()
         val unprocessed = assets.filter { it.id !in processedIds }
         val later = assets.filter { it.id in laterIds }
+        val favorites = assets.filter { it.isFavorite || it.id in favoriteIds }
         val out = mutableListOf<MediaQueue>()
         out += queue(QueueType.RANDOM, "", unprocessed)
         out += queue(QueueType.SCREENSHOT, "", unprocessed.filter { it.isScreenshot() })
@@ -63,7 +65,7 @@ object QueueEngine {
         )
         out += queue(QueueType.UNPROCESSED, "", unprocessed)
         out += queue(QueueType.LATER, "", later)
-        out += queue(QueueType.FAVORITE, "", unprocessed.filter { it.isFavorite })
+        out += queue(QueueType.FAVORITE, "", favorites)
 
         // 按月份拆分为多个队列，便于逐步整理历史相册（PRD 4.3 某个月份）
         unprocessed

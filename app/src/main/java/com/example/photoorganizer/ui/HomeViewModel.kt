@@ -808,7 +808,12 @@ class HomeViewModel(
                 .filter { it.status == MediaStatus.LATER.value }
                 .map { it.localAssetId }
                 .toSet()
-        val queues = QueueEngine.build(activeAssets, processedIds, laterIds)
+        val favoriteIds =
+            s.statuses
+                .filter { it.status == MediaStatus.FAVORITE.value }
+                .map { it.localAssetId }
+                .toSet()
+        val queues = QueueEngine.build(activeAssets, processedIds, laterIds, favoriteIds)
         val picked =
             queues.firstOrNull { it.type == s.queueType && it.title == s.queueTitle }
                 ?: queues.firstOrNull { it.type == s.queueType }

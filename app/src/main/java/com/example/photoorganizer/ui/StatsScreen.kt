@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.photoorganizer.data.local.MediaStatus
 import com.example.photoorganizer.data.local.UserActionLogEntity
 import com.example.photoorganizer.domain.LibraryStats
 import com.example.photoorganizer.domain.MediaQueue
@@ -382,5 +383,8 @@ private fun queueProgressTotal(
         }
         QueueType.SIMILAR -> null
         QueueType.MONTH -> queue.items.size
-        QueueType.FAVORITE -> state.assets.count { it.isFavorite }
+        QueueType.FAVORITE ->
+            state.assets.count { asset ->
+                asset.isFavorite || state.statusById[asset.id] == MediaStatus.FAVORITE.value
+            }
     }
