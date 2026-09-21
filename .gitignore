@@ -45,6 +45,19 @@ captures/
 keystore.properties
 signing.properties
 *-credentials.txt
+credentials.*
+secrets.*
+secret.*
+.env
+.env.*
+google-services.json
+service-account*.json
+firebase-*.json
+
+# Private project notes
+AGENT.md
+AGENTS.md
+docs/
 
 # OS
 .DS_Store
