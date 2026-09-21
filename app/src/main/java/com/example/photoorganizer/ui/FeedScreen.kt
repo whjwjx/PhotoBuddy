@@ -110,7 +110,7 @@ import kotlin.math.roundToInt
 
 private const val SWIPE_ACTION_THRESHOLD = 120f
 
-/** Slidebox 式单卡整理流：当前照片做完一个决策后自动推进到下一张。 */
+/** 单卡整理流：当前照片做完一个决策后自动推进到下一张。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedScreen(
