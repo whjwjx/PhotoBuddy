@@ -117,4 +117,4 @@ PhotoBuddy is an early open-source preview. The app is already usable for local 
 
 ## License
 
-No open-source license has been selected yet. Add a license such as MIT or Apache-2.0 before encouraging third-party redistribution or reuse.
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
