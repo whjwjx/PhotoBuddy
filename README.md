@@ -1,163 +1,120 @@
 # PhotoBuddy
 
-像刷短视频一样上下滑刷自己的照片和视频，顺手把相册整理干净的 **Android 原生 App**。
+[![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
+[![Kotlin](https://img.shields.io/badge/Kotlin-Compose-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
+[![Release](https://img.shields.io/badge/release-v0.1.0-blue)](https://github.com/whjwjx/PhotoBuddy/releases)
 
-## 为什么做
+PhotoBuddy is an offline-first Android app for cleaning up photos and videos with a low-pressure, swipe-based review flow.
 
-手机相册长期积累后有几个老大难：
+像刷短视频一样一张张整理本地照片和视频：保留、收藏、稍后处理、加入待删除复核，真正删除前始终交给 Android 系统确认。
 
-- 照片、截图、视频越来越多，占用大量本机空间
-- 手动整理成本高，很难一次性处理几千到几万张
-- **删除决策成本高**：担心误删，也难判断哪些值得留
-- 网盘偏"存储"、相册 App 偏"浏览"，都不聚焦"顺手清理"
+[Download APK](https://github.com/whjwjx/PhotoBuddy/releases) · [Features](#features) · [Build from Source](#build-from-source) · [Privacy & Safety](#privacy--safety)
 
-所以本产品的核心思路是：**把整理变成低压力的单张决策流**，而不是让用户面对一整屏缩略图做决策。
+## Why
 
-## 命名说明
+Phone galleries grow quietly: screenshots, duplicate shots, large videos, saved images, and old memories all end up in the same place. Traditional gallery apps are good at browsing, but not always good at helping you make small cleanup decisions every day.
 
-当前 App 暂用 **PhotoBuddy** 作为公开展示名。这个名字亲切、好记，适合当前以照片和视频整理为主的阶段。
+PhotoBuddy turns cleanup into a simple loop:
 
-后续如果加入音乐、录音、下载文件、文档等更广义的本地整理能力，可能需要重新评估更宽的产品名。当前不会使用与既有产品高度相似的名称，也不会在名称、图标或描述里暗示与其他商业产品存在关联。
+1. Look at one photo or video.
+2. Make one small decision.
+3. Move on.
+4. Review before anything is deleted.
 
-> Note: PhotoBuddy is a working name for this open-source project. Please do your own trademark review before using it for app-store distribution.
+The goal is not automatic deletion. The goal is a calmer way to make progress.
 
-## 需求范围
+## Features
 
-### 当前做：本地 MVP（PRD 阶段 1）
+- Swipe through local photos and videos one item at a time.
+- Mark media as keep, favorite, later, or pending delete.
+- Review pending deletes before calling Android system confirmation.
+- Organize media into local in-app albums without moving or renaming files by default.
+- Jump into short queues: screenshots, large videos, recent media, monthly review, today in history, favorites, and later.
+- Compare similar-photo candidates and keep the better shot.
+- Track cleanup progress, estimated releasable space, and daily activity.
+- Store state locally with Room and DataStore.
 
-- 读取本地照片和视频
-- 随机整理卡片流 / 按月份、截图、大视频、相册筛选
-- 保留、待删除、稍后、收藏、加入相册
-- 待删除复核页集中确认，且优先移入系统「最近删除」
-- 整理进度、已释放空间、今日整理数量统计
-- 本地规则队列与增量扫描
+## Privacy & Safety
 
-### 明确暂不做
+- Local-first: photos and videos stay on your device.
+- No account, no server, no cloud upload.
+- Swipe-up only marks media as pending delete.
+- Final deletion requires review and Android system confirmation.
+- App albums are local mappings by default; PhotoBuddy does not move, rename, or create system album files unless a future feature explicitly says so.
+- Android partial photo access is supported, but choosing full media access gives the app a complete gallery view.
 
-- AI 自动整理队列（PRD 阶段 2）
-- 家庭主机备份（PRD 阶段 3）
-- iOS / 纯 HarmonyOS NEXT 版本
-- 完全自动删除（信任成本过高，且违背"删除必须可解释"）
-- App 私有图库导入/导出模式（后续评估）：把系统照片导入 App 内整理，完成后可留在 App、导回系统相册或二次备份
+## Install
 
-## 功能现状
+Download the latest APK from [Releases](https://github.com/whjwjx/PhotoBuddy/releases). Release assets also include `SHA256SUMS.txt` for basic file verification.
 
-| 模块 | 状态 | 说明 |
-|---|---|---|
-| 媒体扫描 | ✅ | 全量 + 增量（WorkManager 每日一次），结果存 Room 索引 |
-| 刷照片流 | ✅ | 全屏沉浸整理，上滑待删除 / 下滑收藏 / 左滑稍后 / 右滑保留，支持手势引导与侧边操作抽屉 |
-| 整理队列 | ✅ | 随机、截图、大视频、最近 30 天、往年今日、按月份、未整理、稍后、收藏 |
-| 筛选 | ✅ | 按媒体类型、按系统相册 |
-| 删除 | ✅ | 整理页只加入待删除；复核页选择后交给系统确认，优先**移入系统最近删除** |
-| 恢复 | ✅ | 待删除复核页可恢复到未整理或标记保留；已进入系统最近删除的记录可尝试系统恢复 |
-| 批量确认 | ✅ | 多选 + 显示数量/预计释放空间，真实删除统一走系统确认 |
-| 视频播放 | ✅ | 自动播放、暂停、可拖动进度条 |
-| 应用内相册 | ✅ | 自定义相册分组、加入、查看、移除；默认只记录 App 内映射，不移动系统文件 |
-| 相似照片 | ✅ | 独立短队列，横向对比候选，显示尺寸/大小/时间，可保留当前并把其余放入待删除复核 |
-| 短队列首页 | ✅ | 继续整理、往年今日、按月份、按相册、待删除复核等入口 |
-| 快捷相册栏 | ✅ | 整理流底部横向相册栏，点相册立即归类，更多相册抽屉支持搜索、新建、置顶/最近使用 |
-| 待删除复核 | ✅ | 放大缩略图，未选择时隐藏操作栏，支持按来源筛选、恢复、批量系统删除确认 |
-| 设置 | ✅ | 每日整理目标、通知提醒、系统影响边界说明、Debug 一键还原 |
-| 每日整理任务 | ✅ | 目标进度条，跨天自动清零 |
-| 操作日志 | ✅ | 记录每次决策的动作/来源/前后状态 |
-| 系统返回 | ✅ | 整理页返回会走退出复核逻辑；其它一级页返回首页，避免误退到桌面 |
+Requirements:
 
-## 刷卡式整理体验
+- Android 8.0 or later
+- Photo/video media permission
+- "Install unknown apps" enabled for your browser or file manager when installing from GitHub
 
-当前版本已经具备一套完整的低压力整理闭环：
+For the first public preview, it is best to try PhotoBuddy on a backed-up device or test gallery before using it with irreplaceable media.
 
-- 单张整理：保留、稍后、收藏、加入待删除、撤销、切换短队列。
-- 点击相册归类：底部横向相册栏 + 更多相册抽屉，归类后自动继续下一张。
-- 更多相册：搜索、新建、置顶、最近使用、进入相册管理。
-- 待删除复核：待删除集中复核，真正删除前再进入系统确认。
-- 相似照片比较：独立队列，候选横向对比，保留当前时其余只进入待删除复核。
-- 首页入口：继续整理、往年今日、按月份、按相册、待删除复核等入口。
+## Screenshots
 
-为安全起见，当前仍保留本项目的取舍：
+Screenshots and a short demo GIF are planned for the next documentation pass.
 
-- 上滑只进入 App 内待删除，不直接删除系统照片。
-- 相册归类默认是 App 内映射，不创建、不移动、不重命名系统相册文件。
-- 系统相册同步、云备份、订阅/内购、照片编辑能力暂不纳入当前验收版。
+## Build from Source
 
-建议验收路径：
+Requirements:
 
-1. 首页：检查 Continue、Monthly、Albums、Trash 入口是否清晰。
-2. 整理流：检查手势提示、底部动作栏、底部相册栏、更多相册抽屉。
-3. 相似照片队列：从「切换短队列」进入「相似照片」，检查候选对比与按钮文案。
-4. 待删除复核：检查缩略图尺寸、筛选、选择、恢复、确认删除文案。
-5. 相册页：检查搜索、映射摘要、相册列表、新建相册和相册详情网格。
+- Android Studio, recent stable version
+- JDK 17+
+- Android SDK Platform 37
+- Gradle wrapper included in this repository
 
-## 路线图
+Build a debug APK:
 
-| 阶段 | 内容 | 状态 |
-|---|---|---|
-| 阶段 1 | 本地刷照片整理 | ✅ 已完成 |
-| 阶段 2 | AI 辅助整理（重复/相似/模糊检测） | 暂不做 |
-| 阶段 3 | 家庭主机备份 | 暂不做 |
-| 体验增强 | 每日提醒通知、连续打卡、大相册分页 | 待评估 |
-| 私有图库模式 | 从系统相册导入照片到 App 私有库，在 App 内自由整理/删除；整理后可选择留在 App、导回系统相册或二次备份 | 待评估 |
-
-### 后续方向：App 私有图库模式
-
-当前版本定位是「系统相册的轻量管理工具」：App 读取 MediaStore 索引，整理状态和相册归类主要保存在本地数据库，真正影响系统照片时必须经过 Android 系统确认。
-
-后续可评估新增「App 私有图库模式」：用户主动把系统相册中的图片/视频导入本 App 私有存储区，在 App 内完成整理、删除、归类和备份决策。由于文件归 App 自己管理，删除流程和确认弹窗可完全由 App 设计，不再依赖 MediaStore 的系统确认弹窗。整理完成后提供三种出口：
-
-- 留在 App 内，作为独立相册或照片库使用。
-- 导回系统相册，重新写入 Android MediaStore。
-- 导出到用户指定位置，用于网盘、电脑或家庭主机等二次备份。
-
-需要注意：如果照片/视频只导入到 App 私有目录，系统相册通常无法识别到这些文件，即使它们仍然保存在手机本机存储中。Android 会将 App 私有文件与公共媒体库隔离；若希望系统相册也能看到整理后的内容，必须通过 MediaStore 写入公共相册，或提供明确的“导回系统相册”流程。
-
-该模式需要单独设计导入去重、原图质量、空间占用、导出失败恢复、是否删除系统原件等流程，暂不混入当前本地整理主线。
-
-## 开发环境
-
-| 项 | 要求 |
-|---|---|
-| IDE | Android Studio（最新稳定版） |
-| JDK | 17+ |
-| Android SDK | Platform 37、Build-Tools、Platform-Tools、cmdline-tools |
-| Gradle | 8.13（已配腾讯镜像，无需翻墙） |
-| 调试设备 | Android 8.0（API 26）以上 |
-
-环境变量已配置（**新开终端生效**）：
-
-```
-ANDROID_HOME = C:\Users\wanghj\AppData\Local\Android\Sdk
-Path += %ANDROID_HOME%\platform-tools
-Path += %ANDROID_HOME%\cmdline-tools\latest\bin
+```bash
+./gradlew assembleDebug
 ```
 
-## 构建与运行
-
-**方式一：Android Studio**
-打开项目 → 顶部选设备 → 点 ▶ Run
-
-**方式二：命令行**
+On Windows:
 
 ```powershell
-cd d:\personal_items\photo-organizer
-
-# 构建
 .\gradlew.bat assembleDebug
-
-# 安装（只连一台设备）
-adb install -r app\build\outputs\apk\debug\app-debug.apk
-
-# 连了多台设备时指定序列号
-adb devices
-adb -s <序列号> install -r app\build\outputs\apk\debug\app-debug.apk
 ```
 
-> 华为手机需额外开启：开发者选项 → **USB 调试** + **「允许通过 USB 安装应用」**。
+The debug APK will be generated under:
 
-## 测试约定
+```text
+app/build/outputs/apk/debug/
+```
 
-| 设备 | 序列号 | 谁测 |
-|---|---|---|
-| 模拟器（API 37） | `emulator-5554` | 可自动化 |
-| 真机 Mate 70 Pro（HarmonyOS 4.3） | `6EN0225729004566` | **人工测**（含真实照片，勿跑自动化删除） |
+## Tech Stack
 
-授权时请在系统弹窗选 **「Allow all」**，选「Allow limited access」会让 App 只能看到部分照片。
+- Kotlin
+- Jetpack Compose + Material 3
+- Room
+- DataStore
+- MediaStore
+- WorkManager
+- Coil
+- Media3 ExoPlayer
 
+## Roadmap
+
+| Area | Status |
+|---|---|
+| Local photo/video cleanup | Available |
+| Pending-delete review flow | Available |
+| Local albums | Available |
+| Similar-photo comparison | Available |
+| Daily reminders and streaks | Planned |
+| Better large-library paging | Planned |
+| AI-assisted grouping and quality signals | Later |
+| Private in-app media library mode | Later |
+| Audio and broader file cleanup | Exploratory |
+
+## Project Status
+
+PhotoBuddy is an early open-source preview. The app is already usable for local photo/video cleanup, but the public packaging, screenshots, documentation, and release workflow are still being polished.
+
+## License
+
+No open-source license has been selected yet. Add a license such as MIT or Apache-2.0 before encouraging third-party redistribution or reuse.
