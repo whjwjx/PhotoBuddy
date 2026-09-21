@@ -63,7 +63,7 @@ import com.example.photoorganizer.domain.MediaQueue
 import com.example.photoorganizer.domain.QueueType
 import com.example.photoorganizer.domain.StatsService
 
-/** Slidebox 风格首页：把大相册拆成短队列，主入口始终是继续整理。 */
+/** 短队列首页：把大相册拆成低压力入口，主入口始终是继续整理。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(

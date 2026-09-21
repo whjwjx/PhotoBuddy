@@ -335,7 +335,7 @@ class HomeViewModel(
         }
     }
 
-    /** 从系统相册来源启动整理，复用 Slidebox 的 Album Organization 入口。 */
+    /** 从系统相册来源启动整理，复用按相册组织照片的短队列入口。 */
     fun selectSystemAlbumQueue(
         bucketKey: String,
         bucketName: String,
@@ -356,14 +356,14 @@ class HomeViewModel(
         }
     }
 
-    /** 用户对当前卡片的决策。删除在 Slidebox 模型里只进入 App 内待删除区。 */
+    /** 用户对当前卡片的决策。删除在本地安全模型里只进入 App 内待删除区。 */
     fun act(status: MediaStatus) {
         val nextStatus = if (status == MediaStatus.DELETE) MediaStatus.TRASH else status
         val asset = _uiState.value.current ?: return
         viewModelScope.launch { finishAction(asset, nextStatus, actionMessage(nextStatus)) }
     }
 
-    /** 下拉收藏支持二次触发取消 App 内收藏，贴近 Slidebox 的轻量切换手感。 */
+    /** 下拉收藏支持二次触发取消 App 内收藏，保持轻量切换手感。 */
     fun toggleFavorite() {
         val state = _uiState.value
         val asset = state.current ?: return
