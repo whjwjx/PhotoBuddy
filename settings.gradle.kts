@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "PhotoOrganizer"
+rootProject.name = "PhotoBuddy"
 include(":app")
