@@ -1,5 +1,9 @@
 # PhotoBuddy
 
+<p align="center">
+  <img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" width="120" alt="PhotoBuddy app icon" />
+</p>
+
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-Compose-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![Release](https://img.shields.io/badge/release-v0.1.0-blue)](https://github.com/whjwjx/PhotoBuddy/releases)
@@ -57,7 +61,7 @@ For the first public preview, it is best to try PhotoBuddy on a backed-up device
 
 ## Screenshots
 
-Screenshots and a short demo GIF are planned for the next documentation pass.
+The app icon is shown above for now. Real app screenshots and a short demo GIF are planned for the next documentation pass.
 
 ## Build from Source
 
